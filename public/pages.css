@@ -9,7 +9,7 @@
 .site-signin { display: inline-flex; align-items: center; gap: 11px; padding: 10px 15px; border: 1px solid #e8e7f0; border-radius: 8px; background: #fff; color: #504e69; font-size: 10px; font-weight: 650; transition: border-color .2s, color .2s; }
 .site-signin:hover { border-color: #c9c3f5; color: #6b5ed9; }
 .site-signin span { color: #7770d8; }
-.landing-hero { position: relative; display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 20px; max-width: 1240px; min-height: 520px; margin: 0 auto; padding: 35px 42px 45px; }
+.landing-hero { position: relative; display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 20px; width: 100%; min-height: 520px; margin: 0 auto; padding: 35px max(20px, calc((100vw - 1156px) / 2)) 45px; background: linear-gradient(90deg, rgba(17, 41, 29, .88), rgba(17, 41, 29, .78) 52%, rgba(17, 41, 29, .62)), url("assets/images/student-clubs.png") center 44% / cover no-repeat; }
 .hero-copy { position: relative; z-index: 1; padding-bottom: 8px; }
 .landing-eyebrow { margin: 0 0 16px; color: #8d8ea1; font-size: 9px; font-weight: 750; letter-spacing: 1.4px; }
 .landing-hero h1 { font-size: clamp(42px, 5.3vw, 65px); line-height: 1.08; letter-spacing: -3.2px; }
@@ -55,9 +55,10 @@
 .preview-activity-head strong { color: #44455a; font-size: 9px; }
 .preview-activity-head span { color: #aaaaba; font-size: 6px; letter-spacing: .8px; }
 .preview-event { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid #f3f2f6; }
-.preview-event i { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 7px; font-size: 14px; font-style: normal; }
-.event-robot { background: #eeecff; }
-.event-art { background: #fff0e9; }
+.preview-event i { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 7px; font-style: normal; }
+.preview-event i svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.event-robot { background: #eeecff; color: #635ac5; }
+.event-art { background: #fff0e9; color: #bd775e; }
 .preview-event > span { display: grid; gap: 4px; min-width: 0; }
 .preview-event strong { overflow: hidden; color: #535468; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .preview-event small { color: #a1a2b0; font-size: 7px; }
@@ -106,7 +107,8 @@
 .community-button { background: #fff; color: #6458cf; box-shadow: 0 6px 15px #5249a514; }
 .community-art { position: relative; height: 265px; }
 .community-blob { position: absolute; top: 20px; left: 50%; width: 215px; height: 215px; transform: translateX(-50%) rotate(-12deg); border-radius: 43% 57% 59% 41% / 49% 38% 62% 51%; background: #dedbfa; }
-.community-tile { position: absolute; z-index: 1; display: grid; width: 91px; height: 91px; place-items: center; border: 5px solid #f0efff; border-radius: 17px; box-shadow: 0 9px 24px #5148891c; font-size: 33px; transform: rotate(-8deg); }
+.community-tile { position: absolute; z-index: 1; display: grid; width: 91px; height: 91px; place-items: center; border: 5px solid #f0efff; border-radius: 17px; box-shadow: 0 9px 24px #5148891c; transform: rotate(-8deg); }
+.community-tile svg { width: 35px; height: 35px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .community-tile span { position: absolute; right: 8px; bottom: 6px; color: #8b88a5; font-size: 6px; font-weight: 750; letter-spacing: 1px; }
 .tile-robot { top: 12px; left: 19%; background: #e9e7ff; }
 .tile-art { top: 45px; right: 11%; transform: rotate(9deg); background: #fff0e9; }
@@ -609,6 +611,7 @@ html[data-theme="dark"] .floating-note,
 html[data-theme="dark"] .progress-ring > div,
 html[data-theme="dark"] .community-tile { border-color: var(--border-main); background-color: var(--surface); color: var(--text-main); }
 html[data-theme="dark"] .club-art { background: linear-gradient(135deg, #293a30, #202c25); }
+html[data-theme="dark"] .club-art > svg { color: #bad1c0; }
 html[data-theme="dark"] .event-date,
 html[data-theme="dark"] .date-blue,
 html[data-theme="dark"] .badge-icon,
@@ -623,6 +626,14 @@ html[data-theme="dark"] .event-art { background: #293a30; color: #bad1c0; }
 html[data-theme="dark"] .preview-brand,
 html[data-theme="dark"] .preview-activity-head strong,
 html[data-theme="dark"] .preview-event strong { color: var(--text-main); }
+
+.landing-page .landing-hero h1 { color: #fff; }
+.landing-page .landing-hero h1 span { color: #c1e0c8; }
+.landing-page .landing-hero .landing-eyebrow { color: #dce9df; }
+.landing-page .landing-hero .hero-description,
+.landing-page .landing-hero .hero-proof,
+.landing-page .landing-hero .hero-secondary { color: #f0f5f1; }
+.landing-page .landing-hero .play-icon { border-color: #ffffff80; color: #fff; }
 html[data-theme="dark"] .preview-stat-label,
 html[data-theme="dark"] .preview-event small,
 html[data-theme="dark"] .preview-event b,

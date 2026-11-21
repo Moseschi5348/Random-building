@@ -8,6 +8,7 @@
     <title>Northstar Student Life | Find your people</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="pages.css">
+    <link rel="preload" href="assets/images/student-clubs.png" as="image">
     <script src="theme.js" defer></script>
 </head>
 <body class="landing-page">
@@ -55,12 +56,11 @@
                     </div>
                     <div class="preview-activity">
                         <div class="preview-activity-head"><strong>Up next</strong><span>YOUR WEEK</span></div>
-                        <div class="preview-event"><i class="event-robot">🤖</i><span><strong>Robotics build session</strong><small>Wednesday · 3:30 PM</small></span><b>↗</b></div>
-                        <div class="preview-event"><i class="event-art">🎨</i><span><strong>Art & Design Studio</strong><small>Friday · 3:15 PM</small></span><b>↗</b></div>
+                        <div class="preview-event"><i class="event-robot" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 5v4"></path><circle cx="16" cy="4" r="2"></circle><rect x="6" y="10" width="20" height="17" rx="4"></rect><path d="M3 16h3m20 0h3m-15 1h.01m10-.01h.01M12 22h8"></path></svg></i><span><strong>Robotics build session</strong><small>Wednesday · 3:30 PM</small></span><b>↗</b></div>
+                        <div class="preview-event"><i class="event-art" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 5a11 11 0 0 0 0 22h2.1a2.1 2.1 0 0 0 1.4-3.7 2.2 2.2 0 0 1 1.5-3.8h1.7a4.3 4.3 0 0 0 4.3-4.3A10.2 10.2 0 0 0 16 5Z"></path><circle cx="11" cy="12" r="1"></circle><circle cx="17" cy="10" r="1"></circle><circle cx="22" cy="13" r="1"></circle><circle cx="11" cy="18" r="1"></circle></svg></i><span><strong>Art & Design Studio</strong><small>Friday · 3:15 PM</small></span><b>↗</b></div>
                     </div>
                     <div class="preview-checkin"><span>✓</span> You’re building a great streak <b>8 days</b></div>
                 </div>
-                <div class="floating-note"><span>🌱</span><div><strong>Found your club?</strong><small>Your next adventure awaits.</small></div></div>
             </div>
         </section>
 
@@ -113,10 +113,10 @@
             </div>
             <div class="community-art" aria-hidden="true">
                 <div class="community-blob"></div>
-                <div class="community-tile tile-robot">🤖<span>STEM</span></div>
-                <div class="community-tile tile-art">🎨<span>CREATE</span></div>
-                <div class="community-tile tile-green">🌱<span>GROW</span></div>
-                <div class="community-tile tile-book">📚<span>EXPLORE</span></div>
+                <div class="community-tile tile-robot"><svg viewBox="0 0 32 32"><path d="M16 5v4"></path><circle cx="16" cy="4" r="2"></circle><rect x="6" y="10" width="20" height="17" rx="4"></rect><path d="M3 16h3m20 0h3m-15 1h.01m10-.01h.01M12 22h8"></path></svg><span>STEM</span></div>
+                <div class="community-tile tile-art"><svg viewBox="0 0 32 32"><path d="M16 5a11 11 0 0 0 0 22h2.1a2.1 2.1 0 0 0 1.4-3.7 2.2 2.2 0 0 1 1.5-3.8h1.7a4.3 4.3 0 0 0 4.3-4.3A10.2 10.2 0 0 0 16 5Z"></path><circle cx="11" cy="12" r="1"></circle><circle cx="17" cy="10" r="1"></circle><circle cx="22" cy="13" r="1"></circle><circle cx="11" cy="18" r="1"></circle></svg><span>CREATE</span></div>
+                <div class="community-tile tile-green"><svg viewBox="0 0 32 32"><path d="M27 5C16 5 7 9 6 18c-.6 5 3 8 7 8 8 0 13-9 14-21Z"></path><path d="M6 27c4-7 9-12 16-16"></path></svg><span>GROW</span></div>
+                <div class="community-tile tile-book"><svg viewBox="0 0 32 32"><path d="M4.5 8.5c4.2-2.2 8-1.6 11.5 1v18c-3.5-2.6-7.3-3.2-11.5-1zm23 0c-4.2-2.2-8-1.6-11.5 1v18c3.5-2.6 7.3-3.2 11.5-1z"></path><path d="M8 13c2-.7 4-.5 6 .3m10-.3c-2-.7-4-.5-6 .3"></path></svg><span>EXPLORE</span></div>
                 <div class="community-spark community-spark-one">✦</div><div class="community-spark community-spark-two">✳</div>
             </div>
         </section>
