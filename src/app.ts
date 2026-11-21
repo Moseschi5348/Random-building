@@ -71,7 +71,7 @@ export function createApp(prisma: PrismaClient, stripe: Stripe, config: AppConfi
       next();
       return;
     }
-    res.sendFile(resolve(process.cwd(), file), (error) => {
+    res.sendFile(resolve(process.cwd(), "public", file), (error) => {
       if (error) next(error);
     });
   });

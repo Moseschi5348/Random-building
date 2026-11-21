@@ -24,6 +24,19 @@ The backend accepts only addresses ending in `@nutm.edu.ng`. Registration sends 
 
 For production, use HTTPS, production Stripe keys, the Gmail App Password stored in the host's secret manager, and a production managed PostgreSQL URL.
 
+## Deploy to Vercel with Supabase Postgres
+
+The Express app is recognized by Vercel through `src/server.ts`; Vercel runs it as a Function. Static pages, scripts, styles, and fonts live under `public/` so Vercel can serve them from its CDN.
+
+1. Import this GitHub repository into Vercel. Use the repository root as the project root and Node.js 20 or newer.
+2. In Vercel project settings, add the app's environment variables: `DATABASE_URL`, `DIRECT_URL`, `OTP_HASH_SECRET`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `CLIENT_URL`, `CORS_ORIGIN`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `ADMIN_EMAIL`. Keep all passwords and keys in Vercel's encrypted environment-variable settings.
+3. In Supabase's **Connect** dialog, copy the **Transaction pooler** URL for `DATABASE_URL` (port `6543`) and add `pgbouncer=true&connection_limit=1`. Copy the **Session pooler** URL for `DIRECT_URL` (port `5432`). Use the exact host and username Supabase provides; do not share the database password.
+4. Set `CLIENT_URL` and `CORS_ORIGIN` to the deployed HTTPS origin. Vercel supplies the runtime port.
+5. Apply schema migrations once with `npx prisma migrate deploy` using `DIRECT_URL`, then run `npm run db:seed` once with `ADMIN_EMAIL` set. Do not run development migrations against production.
+6. Deploy with `npm run build`. Vercel serves the app through its Express Function and the static frontend through `public/`.
+
+The Prisma datasource uses `DATABASE_URL` for application queries and `DIRECT_URL` for migrations. Vercel deployments require a production Stripe secret key under the current configuration; Stripe test keys are rejected when `NODE_ENV` is `production`.
+
 Stripe test webhooks can be forwarded locally with:
 
 ```text
