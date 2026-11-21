@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import Stripe from "stripe";
-import { createApp } from "./app";
+import { createApp } from "./app-factory";
 import { getConfig } from "./config";
 
 const config = getConfig();

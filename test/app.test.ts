@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import Stripe from "stripe";
 import type { Server } from "node:http";
-import { createApp } from "../src/app";
+import { createApp } from "../src/app-factory";
 import type { AppConfig } from "../src/config";
 
 const stripe = new Stripe("sk_test_dis_backend");
