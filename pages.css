@@ -71,11 +71,17 @@
 .floating-note strong { color: #4b4c60; font-size: 8px; }
 .floating-note small { color: #999aaa; font-size: 7px; }
 
-.landing-trust { display: flex; align-items: center; justify-content: center; gap: clamp(24px, 6vw, 84px); min-height: 65px; padding: 12px 20px; border-top: 1px solid #eeeff5; border-bottom: 1px solid #eeeff5; background: #fff; }
-.landing-trust span { display: flex; align-items: center; gap: 8px; color: #77798d; font-size: 9px; font-weight: 600; }
-.landing-trust i { color: #786ce0; font-size: 13px; font-style: normal; }
-.landing-trust span:nth-child(2) i { color: #d99670; }
-.landing-trust span:nth-child(3) i { color: #5da786; }
+.landing-trust { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 24px max(20px, calc((100vw - 1156px) / 2)); border-top: 1px solid #eeeff5; border-bottom: 1px solid #eeeff5; background: var(--surface-muted); }
+.trust-card { display: flex; align-items: center; gap: 13px; min-width: 0; min-height: 86px; padding: 14px 16px; border: 1px solid var(--border-main); border-radius: 14px; background: var(--surface); color: var(--text-main); box-shadow: 0 5px 16px #24372c0a; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+.trust-card:hover { transform: translateY(-4px); border-color: #9ab59f; box-shadow: 0 12px 24px #24372c18; }
+.trust-icon { display: grid; flex: 0 0 43px; width: 43px; height: 43px; place-items: center; border-radius: 13px; background: var(--forest-pale); color: var(--forest); font-size: 20px; }
+.trust-card:nth-child(2) .trust-icon { background: #e8eee9; color: #41634b; }
+.trust-card:nth-child(3) .trust-icon { background: #e4eee6; color: #315d43; }
+.trust-copy { display: grid; gap: 4px; min-width: 0; }
+.trust-copy strong { color: var(--text-main); font-size: 14px; line-height: 1.3; }
+.trust-copy small { color: var(--text-muted); font-size: 12px; line-height: 1.4; }
+.trust-arrow { display: grid; flex: 0 0 25px; width: 25px; height: 25px; place-items: center; margin-left: auto; border-radius: 50%; background: var(--forest-pale); color: var(--forest); font-size: 15px; transition: transform .2s ease, background-color .2s ease, color .2s ease; }
+.trust-card:hover .trust-arrow { transform: translate(2px, -2px); background: #28523f; color: #fff; }
 .landing-section { max-width: 1240px; margin: 0 auto; padding: 86px 42px 82px; }
 .section-intro { text-align: center; }
 .section-intro .landing-eyebrow { margin-bottom: 10px; }
@@ -215,6 +221,10 @@ body[data-protected-page]:not(.session-ready) .app-shell { visibility: hidden; }
     .community-band { padding: 38px; }
     .integrity-section { padding-right: 0; padding-left: 0; }
 }
+@media (min-width: 601px) and (max-width: 900px) {
+    .landing-trust { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .trust-card:last-child { grid-column: 1 / -1; width: calc(50% - 7px); justify-self: center; }
+}
 @media (max-width: 600px) {
     .site-header { height: 62px; padding: 0 15px; }
     .site-header .brand-copy { font-size: 14px; }
@@ -233,7 +243,8 @@ body[data-protected-page]:not(.session-ready) .app-shell { visibility: hidden; }
     .preview-card { width: min(360px, 94%); }
     .floating-note { right: 0; bottom: 4px; }
     .deco-star { top: 16px; right: 10px; }
-    .landing-trust { align-items: flex-start; flex-direction: column; gap: 13px; padding: 18px 25px; }
+    .landing-trust { grid-template-columns: 1fr; gap: 10px; padding: 18px 15px; }
+    .trust-card { min-height: 74px; padding: 12px 14px; }
     .landing-section { padding: 60px 19px; }
     .section-intro h2 { font-size: 26px; }
     .steps-grid { grid-template-columns: 1fr; gap: 9px; margin-top: 24px; }
@@ -390,7 +401,8 @@ body, .landing-page, .login-page { background: var(--page-bg); color: var(--text
 .login-quote-mark { color: var(--forest); }
 .login-aside-bottom p { color: #53685b; }
 .login-aside-bottom > span { color: #718477; }
-.site-footer, .landing-trust { border-color: var(--border-main); background: var(--surface); color: var(--text-muted); }
+.site-footer { border-color: var(--border-main); background: var(--surface); color: var(--text-muted); }
+.landing-trust { border-color: var(--border-main); background: var(--surface-muted); color: var(--text-muted); }
 .footer-brand { color: var(--text-main); }
 .final-cta .landing-eyebrow { color: var(--text-muted); }
 .community-button { background: var(--surface); color: var(--forest); }
@@ -452,8 +464,8 @@ html[data-theme="dark"] .login-security strong,
 html[data-theme="dark"] .login-aside-copy h1,
 html[data-theme="dark"] .integrity-heading h2,
 html[data-theme="dark"] .final-cta h2 { color: var(--text-main); }
-html[data-theme="dark"] .landing-trust,
 html[data-theme="dark"] .site-footer { border-color: var(--border-main); background: var(--surface); color: var(--text-muted); }
+html[data-theme="dark"] .landing-trust { border-color: var(--border-main); background: var(--surface-muted); color: var(--text-muted); }
 html[data-theme="dark"] .community-band,
 html[data-theme="dark"] .login-aside { background: #354a3b; }
 html[data-theme="dark"] .community-blob { background: #405b48; }
@@ -570,8 +582,8 @@ html[data-theme="light"] .login-main { background: transparent; }
 .preview-brand i, .proof-school-mark { background: var(--forest); color: #fff; }
 .preview-avatar, .avatar { background: var(--forest-pale); color: var(--forest); }
 .event-robot, .event-art { background: var(--forest-pale); }
-.landing-trust i { color: var(--forest); }
-.landing-trust span:nth-child(2) i, .landing-trust span:nth-child(3) i { color: var(--text-muted); }
+.trust-card:nth-child(2) .trust-icon,
+.trust-card:nth-child(3) .trust-icon { background: var(--forest-pale); color: var(--forest); }
 .deco-dot { background: #72927b; box-shadow: 0 0 0 8px #72927b24; }
 .floating-note { border-color: var(--border-main); }
 .preview-stat-icon.stat-green { color: var(--forest); }
@@ -792,7 +804,7 @@ html[data-theme="dark"] .peer-avatar-lilac {
 .preview-checkin b,
 .floating-note strong,
 .floating-note small,
-.landing-trust span,
+.trust-copy small,
 .step-number,
 .step-card p,
 .section-intro > p:last-child,
@@ -902,4 +914,156 @@ html[data-theme="dark"] .app-shell .nav-link:hover .nav-count,
 html[data-theme="dark"] .app-shell .nav-link:focus-visible .nav-count,
 html[data-theme="dark"] .app-shell .nav-link.active .nav-count {
     background: #ffffff2e;
+}
+
+html[data-theme="dark"] .site-signin:hover,
+html[data-theme="dark"] .filter-tab:hover,
+html[data-theme="dark"] .filter-tab.active,
+html[data-theme="dark"] .select-button:hover,
+html[data-theme="dark"] .theme-toggle:hover,
+html[data-theme="dark"] .sign-out-button:hover:not(:disabled),
+html[data-theme="dark"] .activity-register-button:hover:not(:disabled) {
+    border-color: #28523f;
+    background: #28523f;
+    color: #fff;
+}
+
+html[data-theme="dark"] .site-signin:hover span { color: #fff; }
+
+.button,
+.site-signin,
+.login-submit,
+.theme-toggle,
+.sign-out-button,
+.filter-tab,
+.select-button,
+.join-button,
+.checkin-button,
+.activity-register-button,
+.peer-actions button,
+.game-row button,
+.meetup-row button,
+.password-toggle,
+.text-link,
+.calendar-link,
+.sidebar-card a,
+.hero-secondary,
+.back-home {
+    transition: color .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.site-signin:hover,
+.button:hover:not(:disabled),
+.login-submit:hover:not(:disabled),
+.theme-toggle:hover,
+.sign-out-button:hover,
+.join-button:hover:not(:disabled),
+.checkin-button:hover:not(:disabled),
+.activity-register-button:hover:not(:disabled),
+.peer-actions button:hover:not(:disabled),
+.game-row button:hover:not(:disabled),
+.meetup-row button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 7px 18px #183d2b24;
+}
+
+.site-signin:hover,
+.filter-tab:hover,
+.filter-tab.active,
+.select-button:hover,
+.theme-toggle:hover,
+.sign-out-button:hover,
+.button-primary:hover:not(:disabled),
+.login-submit:hover:not(:disabled),
+.join-button:hover:not(:disabled),
+.checkin-button:hover:not(:disabled),
+.activity-register-button:hover:not(:disabled),
+.peer-actions button:hover:not(:disabled),
+.game-row button:hover:not(:disabled),
+.meetup-row button:hover:not(:disabled) {
+    border-color: #28523f;
+    background: #28523f;
+    color: #fff;
+}
+
+.site-signin:hover span { color: #fff; }
+.text-link:hover,
+.calendar-link:hover,
+.sidebar-card a:hover,
+.hero-secondary:hover,
+.back-home:hover,
+.password-toggle:hover {
+    color: #28523f;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.club-card,
+.panel,
+.stat-card,
+.step-card,
+.peer-card,
+.final-cta,
+.preview-event,
+.community-tile,
+.badge-item {
+    transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .club-card:hover,
+    .panel:hover,
+    .stat-card:hover,
+    .step-card:hover,
+    .peer-card:hover,
+    .final-cta:hover,
+    .preview-event:hover,
+    .community-tile:hover,
+    .badge-item:hover {
+        transform: translateY(-3px);
+        border-color: #9ab59f;
+        box-shadow: 0 10px 22px #24372c18;
+    }
+}
+
+:is(a, button):focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px;
+}
+
+:is(.button, .site-signin, .login-submit, .theme-toggle, .sign-out-button, .filter-tab, .select-button, .join-button, .checkin-button, .activity-register-button, .peer-actions button, .game-row button, .meetup-row button, .password-toggle):active:not(:disabled) {
+    transform: scale(.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .button,
+    .site-signin,
+    .login-submit,
+    .theme-toggle,
+    .sign-out-button,
+    .filter-tab,
+    .select-button,
+    .join-button,
+    .checkin-button,
+    .activity-register-button,
+    .peer-actions button,
+    .game-row button,
+    .meetup-row button,
+    .password-toggle,
+    .text-link,
+    .calendar-link,
+    .sidebar-card a,
+    .hero-secondary,
+    .back-home,
+    .club-card,
+    .panel,
+    .stat-card,
+    .step-card,
+    .peer-card,
+    .final-cta,
+    .preview-event,
+    .community-tile,
+    .badge-item {
+        transition-duration: .01ms;
+    }
 }
