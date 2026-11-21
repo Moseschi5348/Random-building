@@ -156,7 +156,7 @@
 .login-mobile-brand .brand { padding: 0; }
 .login-kicker { margin: 0 0 8px; color: #7770d7; font-size: 8px; font-weight: 750; letter-spacing: 1.4px; }
 .login-card h2 { color: #2c2d40; font-size: 24px; letter-spacing: -.8px; }
-.login-intro { margin: 9px 0 25px; color: #999aaa; font-size: 10px; }
+.login-intro { margin: 9px 0 25px; color: #999aaa; font-size: 14px; line-height: 1.5; }
 .form-label { display: block; margin-bottom: 7px; color: #55566b; font-size: 9px; font-weight: 650; }
 .input-wrap { display: flex; align-items: center; gap: 9px; height: 43px; padding: 0 12px; border: 1px solid #e8e8ef; border-radius: 7px; background: #fff; transition: border-color .2s, box-shadow .2s; }
 .input-wrap:focus-within { border-color: #9287e9; box-shadow: 0 0 0 3px #796ce11c; }
@@ -717,4 +717,189 @@ html[data-theme="dark"] .peer-avatar-lilac {
 
 @media (max-width: 350px) {
     body { min-width: 0; }
+}
+
+.brand-copy span,
+.nav-label,
+.nav-count,
+.sidebar-card p:not(.sidebar-card-title),
+.sidebar-card a,
+.sidebar-profile strong,
+.sidebar-profile span,
+.breadcrumb,
+.school-year,
+.eyebrow,
+.section-kicker,
+.welcome-copy,
+.button,
+.stat-label,
+.stat-trend,
+.stat-note,
+.stat-foot,
+.select-button,
+.summary-label,
+.attendance-legend,
+.chart-col,
+.checkin-strip strong,
+.checkin-strip div span,
+.checkin-button,
+.text-link,
+.event-date span,
+.event-info strong,
+.event-info span,
+.activity-register-button,
+.calendar-link,
+.panel-subtitle,
+.filter-tab,
+.filter-tab span,
+.search-box input,
+.category-pill,
+.member-count,
+.club-card-content > p,
+.club-card h3,
+.club-card-bottom > span,
+.join-button,
+.small-count,
+.my-club-row div strong,
+.my-club-row div span,
+.activity-status,
+.reward-copy span,
+.progress-ring span,
+.badge-item,
+.page-footer,
+.toast,
+.empty-state {
+    font-size: 12px;
+}
+
+.site-nav a,
+.site-signin,
+.landing-eyebrow,
+.hero-button,
+.hero-secondary,
+.hero-proof,
+.hero-description,
+.preview-brand,
+.preview-greeting,
+.preview-stat-label,
+.preview-stats strong small,
+.preview-activity-head strong,
+.preview-activity-head span,
+.preview-event strong,
+.preview-event small,
+.preview-event b,
+.preview-checkin,
+.preview-checkin b,
+.floating-note strong,
+.floating-note small,
+.landing-trust span,
+.step-number,
+.step-card p,
+.section-intro > p:last-child,
+.community-copy > p:not(.landing-eyebrow),
+.community-tile span,
+.integrity-points article > span,
+.integrity-points h3,
+.integrity-points p,
+.integrity-heading .landing-eyebrow,
+.integrity-note,
+.final-cta .landing-eyebrow,
+.site-footer,
+.footer-brand,
+.footer-brand span,
+.login-aside-copy > p:last-child,
+.login-aside-bottom p,
+.login-aside-bottom > span,
+.back-home,
+.login-kicker,
+.form-label,
+.input-wrap input,
+.password-label a,
+.password-toggle,
+.login-submit,
+.login-error,
+.login-status,
+.registration-success,
+.login-security strong,
+.login-security p span,
+.login-help,
+.login-footer,
+.session-guard p,
+.session-guard a,
+.sign-out-button,
+.theme-toggle,
+.notice-level-key span,
+.notice-clear strong,
+.notice-clear > div span,
+.notice-label,
+.notice-item p,
+.notice-unavailable {
+    font-size: 12px;
+}
+
+@media (max-width: 600px) {
+    .app-shell .nav-link { min-height: 58px; font-size: 12px; }
+}
+
+.site-nav a {
+    display: inline-flex;
+    align-items: center;
+    padding: 9px 12px;
+    border-radius: 7px;
+    transition: background-color .18s ease, color .18s ease;
+}
+
+.site-nav a:hover,
+.site-nav a:focus-visible,
+.site-nav a[aria-current="location"] {
+    background: #28523f;
+    color: #fff;
+}
+
+.site-nav a:focus-visible,
+.app-shell .nav-link:focus-visible {
+    outline: 2px solid var(--forest);
+    outline-offset: 3px;
+}
+
+.app-shell .nav-link:hover,
+.app-shell .nav-link:focus-visible,
+.app-shell .nav-link.active {
+    background: #28523f;
+    color: #fff;
+}
+
+.app-shell .nav-link:hover .nav-icon,
+.app-shell .nav-link:focus-visible .nav-icon,
+.app-shell .nav-link.active .nav-icon {
+    color: #fff;
+}
+
+.app-shell .nav-link:hover .nav-count,
+.app-shell .nav-link:focus-visible .nav-count,
+.app-shell .nav-link.active .nav-count {
+    background: #ffffff2e;
+    color: #fff;
+}
+
+html[data-theme="dark"] .app-shell .nav-link:hover,
+html[data-theme="dark"] .app-shell .nav-link:focus-visible,
+html[data-theme="dark"] .app-shell .nav-link.active {
+    background: #28523f;
+    color: #fff;
+}
+
+html[data-theme="dark"] .app-shell .nav-link:hover .nav-icon,
+html[data-theme="dark"] .app-shell .nav-link:focus-visible .nav-icon,
+html[data-theme="dark"] .app-shell .nav-link.active .nav-icon,
+html[data-theme="dark"] .app-shell .nav-link:hover .nav-count,
+html[data-theme="dark"] .app-shell .nav-link:focus-visible .nav-count,
+html[data-theme="dark"] .app-shell .nav-link.active .nav-count {
+    color: #fff;
+}
+
+html[data-theme="dark"] .app-shell .nav-link:hover .nav-count,
+html[data-theme="dark"] .app-shell .nav-link:focus-visible .nav-count,
+html[data-theme="dark"] .app-shell .nav-link.active .nav-count {
+    background: #ffffff2e;
 }

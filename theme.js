@@ -1,5 +1,21 @@
 const themeRoot = document.documentElement;
 const themeButtons = document.querySelectorAll("[data-theme-toggle]");
+const siteNavLinks = document.querySelectorAll('.site-nav a[href^="#"]');
+
+function updateCurrentSiteNavLink() {
+    siteNavLinks.forEach((link) => {
+        if (link.getAttribute("href") === window.location.hash) {
+            link.setAttribute("aria-current", "location");
+        } else {
+            link.removeAttribute("aria-current");
+        }
+    });
+}
+
+if (siteNavLinks.length > 0) {
+    window.addEventListener("hashchange", updateCurrentSiteNavLink);
+    updateCurrentSiteNavLink();
+}
 
 let activeTheme = "light";
 try {
