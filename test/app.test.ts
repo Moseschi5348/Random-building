@@ -44,7 +44,16 @@ describe("API security and health", () => {
     const response = await fetch(`${baseUrl}/health`);
     expect(response.status).toBe(200);
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toEqual({ status: "ok" });
+  });
+
+  it("rejects unapproved CORS origins", async () => {
+    const response = await fetch(`${baseUrl}/health`, {
+      headers: { origin: "https://malicious.example" },
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("access-control-allow-origin")).toBeNull();
   });
 
   it("rejects protected routes without a bearer token", async () => {

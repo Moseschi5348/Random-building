@@ -10,7 +10,10 @@ const configSchema = z.object({
   STRIPE_SECRET_KEY: z.string().startsWith("sk_"),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_"),
   CLIENT_URL: z.string().url(),
-  CORS_ORIGIN: z.string().min(1),
+  CORS_ORIGIN: z.string().min(1).refine(
+    (value) => !value.split(",").some((origin) => origin.trim() === "*"),
+    "CORS_ORIGIN cannot contain a wildcard.",
+  ),
   ADMIN_EMAIL: z.string().email().optional(),
   ADMIN_PASSWORD: z.string().min(12).optional(),
 });
@@ -33,6 +36,33 @@ export function getConfig(): AppConfig {
     throw new Error(`Invalid environment configuration: ${z.prettifyError(parsed.error)}`);
   }
 
+  const corsOrigins = parsed.data.CORS_ORIGIN.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  if (corsOrigins.some((origin) => {
+    try {
+      new URL(origin);
+      return false;
+    } catch {
+      return true;
+    }
+  })) {
+    throw new Error("Invalid environment configuration: CORS_ORIGIN entries must be URLs.");
+  }
+  if (parsed.data.NODE_ENV === "production") {
+    if (
+      corsOrigins.some((origin) => new URL(origin).protocol !== "https:")
+    ) {
+      throw new Error("Invalid environment configuration: production CORS origins must use HTTPS.");
+    }
+    if (new URL(parsed.data.CLIENT_URL).protocol !== "https:") {
+      throw new Error("Invalid environment configuration: production CLIENT_URL must use HTTPS.");
+    }
+    if (parsed.data.STRIPE_SECRET_KEY.startsWith("sk_test_")) {
+      throw new Error("Invalid environment configuration: production cannot use a Stripe test key.");
+    }
+  }
+
   return {
     nodeEnv: parsed.data.NODE_ENV,
     port: parsed.data.PORT,
@@ -42,6 +72,6 @@ export function getConfig(): AppConfig {
     stripeSecretKey: parsed.data.STRIPE_SECRET_KEY,
     stripeWebhookSecret: parsed.data.STRIPE_WEBHOOK_SECRET,
     clientUrl: parsed.data.CLIENT_URL,
-    corsOrigins: parsed.data.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
+    corsOrigins,
   };
 }

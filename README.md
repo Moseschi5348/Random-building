@@ -33,6 +33,7 @@ All API paths are under `/api`.
 | --- | --- | --- |
 | POST | `/auth/register`, `/auth/login` | Public |
 | GET | `/me` | Signed-in user |
+| PATCH | `/me/password` | Signed-in user |
 | GET | `/clubs` | Public |
 | POST | `/clubs` | Administrator |
 | POST | `/clubs/:clubId/join` | Signed-in user |

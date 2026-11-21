@@ -21,7 +21,7 @@ export function requireAuth(prisma: PrismaClient, secret: string): RequestHandle
         throw new HttpError(401, "Authentication is required.");
       }
 
-      const payload = jwt.verify(token, secret);
+      const payload = jwt.verify(token, secret, { algorithms: ["HS256"] });
       if (typeof payload === "string" || typeof (payload as JwtPayload).sub !== "string") {
         throw new HttpError(401, "Invalid access token.");
       }

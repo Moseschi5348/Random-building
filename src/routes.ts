@@ -45,6 +45,8 @@ const attendanceSchema = z.object({
   goodConduct: z.boolean().default(false),
 });
 
+const dummyPasswordHash = bcrypt.hashSync("unreachable-dummy-password", 12);
+
 function currentUserId(req: Request): string {
   if (!req.user) {
     throw new HttpError(401, "Authentication is required.");
@@ -116,7 +118,11 @@ export function createApiRouter(
   router.post("/auth/login", async (req, res) => {
     const body = parseBody(loginSchema, req.body);
     const user = await prisma.user.findUnique({ where: { email: body.email } });
-    if (!user || !user.isActive || !(await bcrypt.compare(body.password, user.passwordHash))) {
+    const passwordMatches = await bcrypt.compare(
+      body.password,
+      user?.isActive ? user.passwordHash : dummyPasswordHash,
+    );
+    if (!user || !user.isActive || !passwordMatches) {
       throw new HttpError(401, "Email or password is incorrect.");
     }
     res.json({
@@ -170,6 +176,36 @@ export function createApiRouter(
       throw new HttpError(404, "User not found.");
     }
     res.json(user);
+  });
+
+  router.patch("/me/password", auth, async (req, res) => {
+    const body = parseBody(
+      z.object({
+        currentPassword: z.string().min(1).max(128),
+        newPassword: z.string().min(12).max(128),
+      }),
+      req.body,
+    );
+    if (body.currentPassword === body.newPassword) {
+      throw new HttpError(400, "New password must be different from the current password.");
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: currentUserId(req) },
+      select: { passwordHash: true },
+    });
+    if (!user) {
+      throw new HttpError(404, "User not found.");
+    }
+    if (!(await bcrypt.compare(body.currentPassword, user.passwordHash))) {
+      throw new HttpError(401, "The current password is incorrect.");
+    }
+
+    await prisma.user.update({
+      where: { id: currentUserId(req) },
+      data: { passwordHash: await bcrypt.hash(body.newPassword, 12) },
+    });
+    res.status(204).send();
   });
 
   router.patch("/users/:userId/role", auth, requireRole(UserRole.ADMIN), async (req, res) => {

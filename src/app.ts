@@ -12,6 +12,10 @@ export function createApp(prisma: PrismaClient, stripe: Stripe, config: AppConfi
   const app = express();
   app.disable("x-powered-by");
   app.use(helmet());
+  app.use((_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    next();
+  });
   app.use(
     cors({
       origin: config.corsOrigins,
@@ -39,7 +43,10 @@ export function createApp(prisma: PrismaClient, stripe: Stripe, config: AppConfi
   );
 
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
-  app.use("/api/webhooks/stripe", express.raw({ type: "application/json" }));
+  app.use(
+    "/api/webhooks/stripe",
+    express.raw({ type: "application/json", limit: "100kb" }),
+  );
   app.use("/api", express.json({ limit: "100kb" }));
   app.use("/api", createApiRouter(prisma, stripe, config));
   app.use(notFoundHandler);
