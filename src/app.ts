@@ -61,6 +61,7 @@ export function createApp(prisma: PrismaClient, stripe: Stripe, config: AppConfi
     "/assets/fonts/Roboto-Medium.ttf": "assets/fonts/Roboto-Medium.ttf",
     "/assets/fonts/Roboto-SemiBold.ttf": "assets/fonts/Roboto-SemiBold.ttf",
     "/assets/fonts/Roboto-Bold.ttf": "assets/fonts/Roboto-Bold.ttf",
+    "/assets/images/student-clubs.png": "assets/images/student-clubs.png",
   };
   app.get(Object.keys(frontendFiles), (req, res, next) => {
     const file = frontendFiles[req.path];
