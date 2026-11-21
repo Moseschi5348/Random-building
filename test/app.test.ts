@@ -15,7 +15,7 @@ const config: AppConfig = {
   otpHashSecret: "test-only-otp-secret-with-more-than-32-characters",
   clientUrl: "http://localhost:5173",
   corsOrigins: ["http://localhost:5173"],
-  graph: null,
+  gmail: null,
 };
 const prisma = new PrismaClient({ datasources: { db: { url: config.databaseUrl } } });
 
@@ -152,7 +152,7 @@ describe("API security and health", () => {
     expect(response.status).toBe(400);
   });
 
-  it("reports missing Microsoft Graph email configuration", async () => {
+  it("reports missing Gmail email configuration", async () => {
     const response = await fetch(`${baseUrl}/api/auth/register`, {
       method: "POST",
       headers: { "content-type": "application/json" },

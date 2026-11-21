@@ -19,27 +19,21 @@ const configSchema = z.object({
     "CORS_ORIGIN cannot contain a wildcard.",
   ),
   ADMIN_EMAIL: z.string().email().optional(),
-  GRAPH_TENANT_ID: optionalEnvString.pipe(z.string().uuid().optional()),
-  GRAPH_CLIENT_ID: optionalEnvString.pipe(z.string().uuid().optional()),
-  GRAPH_CLIENT_SECRET: optionalEnvString.pipe(z.string().min(1).optional()),
-  GRAPH_SENDER_EMAIL: optionalEnvString.pipe(
-    z.string().email().refine(
-      (email) => email.toLowerCase().endsWith("@nutm.edu.ng"),
-      "GRAPH_SENDER_EMAIL must be a NUTM address.",
-    ).optional(),
+  GMAIL_USER: optionalEnvString.pipe(z.string().email().optional()),
+  GMAIL_APP_PASSWORD: z.preprocess(
+    (value) => {
+      if (typeof value !== "string") return value;
+      const password = value.replace(/\s/g, "");
+      return password || undefined;
+    },
+    z.string().min(1).optional(),
   ),
 }).superRefine((data, context) => {
-  const graphValues = [
-    data.GRAPH_TENANT_ID,
-    data.GRAPH_CLIENT_ID,
-    data.GRAPH_CLIENT_SECRET,
-    data.GRAPH_SENDER_EMAIL,
-  ];
-  if (graphValues.some(Boolean) && graphValues.some((value) => !value)) {
+  if (Boolean(data.GMAIL_USER) !== Boolean(data.GMAIL_APP_PASSWORD)) {
     context.addIssue({
       code: "custom",
-      message: "Set all four GRAPH_* variables to enable verification email delivery.",
-      path: ["GRAPH_TENANT_ID"],
+      message: "Set both GMAIL_USER and GMAIL_APP_PASSWORD to enable verification email delivery.",
+      path: ["GMAIL_USER"],
     });
   }
 });
@@ -53,11 +47,9 @@ export type AppConfig = {
   otpHashSecret: string;
   clientUrl: string;
   corsOrigins: string[];
-  graph: {
-    tenantId: string;
-    clientId: string;
-    clientSecret: string;
-    senderEmail: string;
+  gmail: {
+    user: string;
+    appPassword: string;
   } | null;
 };
 
@@ -94,16 +86,11 @@ export function getConfig(): AppConfig {
     }
   }
 
-  const graph =
-    parsed.data.GRAPH_TENANT_ID &&
-    parsed.data.GRAPH_CLIENT_ID &&
-    parsed.data.GRAPH_CLIENT_SECRET &&
-    parsed.data.GRAPH_SENDER_EMAIL
+  const gmail =
+    parsed.data.GMAIL_USER && parsed.data.GMAIL_APP_PASSWORD
       ? {
-          tenantId: parsed.data.GRAPH_TENANT_ID,
-          clientId: parsed.data.GRAPH_CLIENT_ID,
-          clientSecret: parsed.data.GRAPH_CLIENT_SECRET,
-          senderEmail: parsed.data.GRAPH_SENDER_EMAIL,
+          user: parsed.data.GMAIL_USER,
+          appPassword: parsed.data.GMAIL_APP_PASSWORD,
         }
       : null;
 
@@ -116,6 +103,6 @@ export function getConfig(): AppConfig {
     otpHashSecret: parsed.data.OTP_HASH_SECRET,
     clientUrl: parsed.data.CLIENT_URL,
     corsOrigins,
-    graph,
+    gmail,
   };
 }

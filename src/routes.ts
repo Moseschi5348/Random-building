@@ -18,7 +18,7 @@ import {
   setSessionCookie,
 } from "./auth";
 import type { AppConfig } from "./config";
-import { GraphOtpMailer } from "./email";
+import { GmailOtpMailer } from "./email";
 import { HttpError, parseBody } from "./http";
 import {
   createOtp,
@@ -122,7 +122,7 @@ async function createLoginSession(
 
 async function sendRegistrationCode(
   prisma: PrismaClient,
-  mailer: GraphOtpMailer | null,
+  mailer: GmailOtpMailer | null,
   email: string,
   name: string,
   passwordHash: string,
@@ -174,7 +174,7 @@ async function sendRegistrationCode(
   try {
     await mailer.sendVerificationCode(email, code);
   } catch (error) {
-    console.error("Microsoft Graph could not send a registration verification code.", error);
+    console.error("Gmail could not send a registration verification code.", error);
     throw new HttpError(502, "We couldn't send a verification code. Please try again later.");
   }
 }
@@ -207,7 +207,7 @@ export function createApiRouter(
 ): Router {
   const router = Router();
   const auth = requireAuth(prisma);
-  const otpMailer = config.graph ? new GraphOtpMailer(config.graph) : null;
+  const otpMailer = config.gmail ? new GmailOtpMailer(config.gmail) : null;
 
   router.post("/auth/register", async (req, res) => {
     const body = parseBody(registerSchema, req.body);

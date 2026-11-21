@@ -5,7 +5,7 @@ The backend accepts only NUTM addresses ending in `@nutm.edu.ng`. It sends a one
 ## Registration flow
 
 1. The frontend submits the student's name, NUTM email, and password to `POST /api/auth/register`.
-2. The backend validates the exact school email domain, stores a pending registration, and sends a six-digit code through Microsoft Graph.
+2. The backend validates the exact school email domain, stores a pending registration, and sends a six-digit code through Gmail SMTP.
 3. The student submits the code to `POST /api/auth/verify-email`.
 4. On successful verification, the backend creates the student account, marks the school email as verified, and sets an HTTP-only session cookie.
 
@@ -34,9 +34,9 @@ Returns the current account and a session-bound CSRF token. Send the token in `X
 
 Requires the session-bound CSRF token, invalidates the server-side session, and expires the session cookie.
 
-## Microsoft Graph mail setup
+## Gmail sender setup
 
-Register a confidential application in the school's Microsoft Entra tenant, grant the **Microsoft Graph `Mail.Send` application permission**, and obtain administrator consent. Configure `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, and `GRAPH_SENDER_EMAIL` in the server environment. `GRAPH_SENDER_EMAIL` must be an authorized `@nutm.edu.ng` mailbox. Set `OTP_HASH_SECRET` to a separate random value of at least 32 characters. Never put these secrets in frontend code or commit them to GitHub.
+Use a dedicated Gmail account for DIS email. Enable 2-Step Verification, create an App Password in Google Account security settings, and configure `GMAIL_USER` and `GMAIL_APP_PASSWORD` in the server environment. Do not use the account's normal password. Some Google Workspace administrators disable App Passwords. Set `OTP_HASH_SECRET` to a separate random value of at least 32 characters. Never put these secrets in frontend code or commit them to GitHub. Gmail sending limits make this suitable for a low-volume pilot; use a transactional email service if volume grows.
 
 ## Security responsibilities
 
@@ -45,4 +45,4 @@ Register a confidential application in the school's Microsoft Entra tenant, gran
 - Registration and verification requests are rate-limited; sending another code is also throttled per email address.
 - Session cookies are HTTP-only, `SameSite=Lax`, and `Secure` in production. Only a hash of the random session token is stored in PostgreSQL.
 - Enforce authentication and role/record-level authorization on every protected API request. Frontend visibility checks are not an authorization boundary.
-- Use HTTPS in production and keep database URLs, OTP secrets, Microsoft Graph credentials, Stripe keys, and webhook secrets in a deployment secret manager.
+- Use HTTPS in production and keep database URLs, OTP secrets, Gmail App Passwords, Stripe keys, and webhook secrets in a deployment secret manager.
