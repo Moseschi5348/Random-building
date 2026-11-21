@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f7f6eb">
+    <meta name="description" content="Create your Northstar Student Life account.">
+    <title>Create account | Northstar Student Life</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="pages.css">
+    <script src="auth.js" defer></script>
+    <script src="theme.js" defer></script>
+</head>
+<body class="login-page">
+    <main class="login-layout">
+        <section class="login-aside">
+            <a class="brand login-brand" href="index.html" aria-label="Northstar Student Life home">
+                <span class="brand-mark">N</span>
+                <span class="brand-copy">northstar<span>STUDENT LIFE</span></span>
+            </a>
+            <div class="login-aside-copy">
+                <p class="landing-eyebrow"><span class="live-dot"></span> NORTHSTAR STUDENT LIFE</p>
+                <h1>Find your<br>people.<br><span>Find your place.</span></h1>
+                <p>Create a school account to keep your clubs, attendance, and activities together.</p>
+            </div>
+            <div class="login-aside-bottom">
+                <div class="login-quote-mark">N</div>
+                <p>Use your official NUTM school email. Account access is managed by the school service.</p>
+                <span>STUDENT ACCOUNT SUPPORT</span>
+            </div>
+            <div class="login-decoration login-decoration-one"></div>
+            <div class="login-decoration login-decoration-two">✦</div>
+        </section>
+
+        <section class="login-main">
+            <div class="login-top-actions">
+                <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme" aria-pressed="false"><span class="theme-icon">☾</span><span class="theme-label">Dark</span></button>
+                <a class="back-home" href="index.html"><span>←</span> Back to home</a>
+            </div>
+            <div class="login-card">
+                <div class="login-mobile-brand">
+                    <a class="brand" href="index.html"><span class="brand-mark">N</span><span class="brand-copy">northstar<span>STUDENT LIFE</span></span></a>
+                </div>
+                <p class="login-kicker">JOIN NORTHSTAR</p>
+                <h2>Create your account</h2>
+                <p class="login-intro">Register with your NUTM school email and choose a password with at least 12 characters.</p>
+
+                <div class="login-error" id="register-error" role="alert" hidden></div>
+                <form id="register-form" novalidate>
+                    <label class="form-label" for="register-name">Full name</label>
+                    <div class="input-wrap"><span class="input-icon" aria-hidden="true">◉</span><input id="register-name" name="name" type="text" autocomplete="name" maxlength="120" placeholder="Your name" required></div>
+
+                    <label class="form-label register-field-label" for="register-email">School email</label>
+                    <div class="input-wrap"><span class="input-icon" aria-hidden="true">✉</span><input id="register-email" name="email" type="email" autocomplete="email" maxlength="254" placeholder="you@school.edu" required></div>
+
+                    <label class="form-label register-field-label" for="register-password">Password</label>
+                    <div class="input-wrap"><span class="input-icon" aria-hidden="true">⌑</span><input id="register-password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="At least 12 characters" required></div>
+
+                    <label class="form-label register-field-label" for="register-confirm-password">Confirm password</label>
+                    <div class="input-wrap"><span class="input-icon" aria-hidden="true">⌑</span><input id="register-confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="Enter your password again" required></div>
+
+                    <button class="login-submit" id="register-submit" type="submit"><span class="submit-label">Create account</span><span class="submit-arrow">→</span></button>
+                    <p class="login-status" id="register-status" role="status" aria-live="polite"></p>
+                </form>
+
+                <div class="registration-success" id="registration-success" role="status" hidden>
+                    Your account has been created. <a href="login.html">Continue to sign in</a>.
+                </div>
+                <p class="login-help account-switch">Already have an account? <a href="login.html">Sign in</a></p>
+                <div class="login-security"><span class="security-lock">⌑</span><p><strong>Your school account sets your access</strong><span>Student records and account permissions are managed by the school service.</span></p></div>
+            </div>
+            <footer class="login-footer"><span>Northstar Student Life</span><span>Student account registration</span></footer>
+        </section>
+    </main>
+</body>
+</html>

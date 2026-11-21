@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f7f6eb">
+    <meta name="description" content="Browse student clubs and find an activity that fits your interests.">
+    <title>Explore clubs | Northstar Student Life</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="pages.css">
+    <script src="script.js" defer></script>
+    <script src="auth.js" defer></script>
+    <script src="theme.js" defer></script>
+</head>
+<body data-protected-page>
+    <div class="app-shell">
+        <aside class="sidebar" aria-label="Main navigation">
+            <a class="brand" href="home.html" aria-label="Northstar home">
+                <span class="brand-mark">N</span>
+                <span class="brand-copy">northstar<span>STUDENT LIFE</span></span>
+            </a>
+            <div class="nav-label">MENU</div>
+            <nav class="main-nav">
+                <a class="nav-link" href="home.html"><span class="nav-icon">⌂</span>Overview</a>
+                <a class="nav-link active" href="clubs.html" aria-current="page"><span class="nav-icon">◈</span>Clubs<span class="nav-count">12</span></a>
+                <a class="nav-link" href="activities.html"><span class="nav-icon">▤</span>Activities</a>
+                <a class="nav-link" href="rewards.html"><span class="nav-icon">✳</span>Rewards</a>
+                <a class="nav-link" href="community.html"><span class="nav-icon">♡</span>Connect</a>
+            </nav>
+            <div class="sidebar-card">
+                <span class="sidebar-sparkle">✦</span>
+                <p class="sidebar-card-title">Find your next thing</p>
+                <p>Try a club, meet new people, and learn something along the way.</p>
+                <a href="activities.html">View my activities <span>→</span></a>
+            </div>
+            <div class="sidebar-profile">
+                <div class="avatar avatar-small" data-user-initials>JM</div>
+                <div><strong data-user-name>Jordan Miller</strong><span data-user-role>Student</span></div>
+                <button class="sign-out-button" id="sign-out" type="button">Sign out</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div class="breadcrumb">Student portal <span>/</span> <strong>Explore clubs</strong></div>
+                <div class="topbar-actions">
+                    <span class="school-year">2026–27 <span class="year-dot"></span></span>
+                    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme" aria-pressed="false"><span class="theme-icon">☾</span><span class="theme-label">Dark</span></button>
+                    <a class="notification-button" href="home.html#notices" aria-label="Campus notices">♧<span></span></a>
+                    <div class="avatar avatar-top" data-user-initials>JM</div>
+                </div>
+            </header>
+            <section class="welcome-section">
+                <div>
+                    <p class="eyebrow"><span class="live-dot"></span> CLUBS & ACTIVITIES</p>
+                    <h1>Find something you enjoy.</h1>
+                    <p class="welcome-copy">Browse school groups, check when they meet, and join in.</p>
+                </div>
+            </section>
+
+            <section class="panel clubs-panel" aria-label="Available clubs">
+                <div class="panel-heading clubs-heading">
+                    <div><p class="section-kicker">EXPLORE THE OPTIONS</p><h2>Clubs at Northstar</h2><p class="panel-subtitle">Choose a club and see where it takes you.</p></div>
+                </div>
+                <div class="club-tools">
+                    <div class="filter-tabs" role="group" aria-label="Filter clubs by category">
+                        <button class="filter-tab active" data-filter="all">All clubs <span>12</span></button>
+                        <button class="filter-tab" data-filter="creative">Creative</button>
+                        <button class="filter-tab" data-filter="stem">STEM</button>
+                        <button class="filter-tab" data-filter="community">Community</button>
+                    </div>
+                    <label class="search-box"><span>⌕</span><input id="club-search" type="search" placeholder="Search clubs..." aria-label="Search clubs"></label>
+                </div>
+                <div class="club-grid" id="club-grid">
+                    <article class="club-card" data-category="stem" data-name="robotics club build code compete">
+                        <div class="club-art robotics-art"><span>🤖</span><span class="art-spark">✦</span></div>
+                        <div class="club-card-content"><div class="club-meta"><span class="category-pill pill-stem">STEM</span><span class="member-count">◉ 18 members</span></div><h3>Robotics Club</h3><p>Build and program robots with a team. Beginners are welcome.</p><div class="club-card-bottom"><span>Wednesdays · 3:30 PM</span><button class="join-button" data-club="robotics">Join club <span>＋</span></button></div></div>
+                    </article>
+                    <article class="club-card" data-category="creative" data-name="art design studio paint create">
+                        <div class="club-art art-art"><span>🎨</span><span class="art-spark">✦</span></div>
+                        <div class="club-card-content"><div class="club-meta"><span class="category-pill pill-creative">CREATIVE</span><span class="member-count">◉ 24 members</span></div><h3>Art & Design Studio</h3><p>Work on drawing, painting, and design projects together.</p><div class="club-card-bottom"><span>Fridays · 3:15 PM</span><button class="join-button" data-club="art">Join club <span>＋</span></button></div></div>
+                    </article>
+                    <article class="club-card" data-category="community" data-name="green team garden sustainability">
+                        <div class="club-art green-art"><span>🌱</span><span class="art-spark">✦</span></div>
+                        <div class="club-card-content"><div class="club-meta"><span class="category-pill pill-community">COMMUNITY</span><span class="member-count">◉ 16 members</span></div><h3>Green Team</h3><p>Help with the school garden and sustainability projects.</p><div class="club-card-bottom"><span>Tuesdays · 3:20 PM</span><button class="join-button" data-club="green">Join club <span>＋</span></button></div></div>
+                    </article>
+                    <article class="club-card" data-category="stem" data-name="coding collective programming games">
+                        <div class="club-art coding-art"><span>💻</span><span class="art-spark">✦</span></div>
+                        <div class="club-card-content"><div class="club-meta"><span class="category-pill pill-stem">STEM</span><span class="member-count">◉ 21 members</span></div><h3>Coding Collective</h3><p>Learn programming basics and build small projects together.</p><div class="club-card-bottom"><span>Mondays · 3:30 PM</span><button class="join-button" data-club="coding">Join club <span>＋</span></button></div></div>
+                    </article>
+                </div>
+                <p class="empty-state" id="empty-clubs" hidden>No clubs match that search. Try another name or category.</p>
+            </section>
+            <footer class="page-footer"><span>Student activities portal.</span><span>Northstar Academy · Student life</span></footer>
+        </main>
+    </div>
+    <div class="session-guard" id="session-guard" role="status">
+        <section>
+            <div class="session-guard-mark">N</div>
+            <h1>Checking your school account</h1>
+            <p id="session-message">Please wait while we verify your session.</p>
+            <a id="session-link" href="login.html">Return to sign in</a>
+        </section>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

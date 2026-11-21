@@ -3,6 +3,10 @@ const loginError = document.querySelector("#login-error");
 const loginStatus = document.querySelector("#login-status");
 const loginButton = document.querySelector("#login-submit");
 const loginEndpoint = "/api/auth/login";
+const registerForm = document.querySelector("#register-form");
+const registerError = document.querySelector("#register-error");
+const registerStatus = document.querySelector("#register-status");
+const registerButton = document.querySelector("#register-submit");
 
 function setLoginMessage(message, isError) {
     loginError.hidden = !isError;
@@ -146,6 +150,79 @@ if (loginForm) {
     });
 }
 
+if (registerForm) {
+    const passwordInput = registerForm.elements.password;
+    const confirmPasswordInput = registerForm.elements.confirmPassword;
+    const successMessage = document.querySelector("#registration-success");
+
+    registerForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        registerError.hidden = true;
+        registerError.textContent = "";
+        registerStatus.textContent = "";
+
+        if (!registerForm.reportValidity()) return;
+        if (passwordInput.value !== confirmPasswordInput.value) {
+            registerError.textContent = "The passwords don’t match. Please check them and try again.";
+            registerError.hidden = false;
+            confirmPasswordInput.focus();
+            return;
+        }
+
+        registerButton.disabled = true;
+        registerButton.classList.add("is-loading");
+        registerButton.querySelector(".submit-label").textContent = "Creating account";
+
+        try {
+            const response = await fetch("/api/auth/register", {
+                method: "POST",
+                credentials: "include",
+                headers: {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    name: registerForm.elements.name.value.trim(),
+                    email: registerForm.elements.email.value.trim(),
+                    password: passwordInput.value
+                })
+            });
+
+            if (response.status === 409) {
+                registerError.textContent = "An account with that email already exists. Sign in instead.";
+                registerError.hidden = false;
+                return;
+            }
+            if (response.status === 400) {
+                registerError.textContent = "Check your name and email, and use a password between 12 and 128 characters.";
+                registerError.hidden = false;
+                return;
+            }
+            if (response.status === 429) {
+                registerError.textContent = "Too many account requests. Please wait a moment and try again.";
+                registerError.hidden = false;
+                return;
+            }
+            if (!response.ok) {
+                registerError.textContent = "Account creation is temporarily unavailable. Please try again later.";
+                registerError.hidden = false;
+                return;
+            }
+
+            registerForm.hidden = true;
+            successMessage.hidden = false;
+        } catch (error) {
+            console.error("Could not create the student account.", error);
+            registerError.textContent = "We can’t reach the school account service right now. Please try again later.";
+            registerError.hidden = false;
+        } finally {
+            registerButton.disabled = false;
+            registerButton.classList.remove("is-loading");
+            registerButton.querySelector(".submit-label").textContent = "Create account";
+        }
+    });
+}
+
 async function checkDashboardSession() {
     if (!document.body.hasAttribute("data-protected-page")) return;
 
@@ -172,8 +249,18 @@ async function checkDashboardSession() {
         if (!payload.user || typeof payload.user.displayName !== "string" || typeof payload.user.role !== "string") {
             throw new Error("invalid-session");
         }
-        if (!Array.isArray(payload.user.permissions) || !payload.user.permissions.includes("student-life:read")) {
+        const requiredPermission = document.body.hasAttribute("data-community-page")
+            ? "community:read"
+            : "student-life:read";
+        if (
+            !Array.isArray(payload.user.permissions) ||
+            !payload.user.permissions.includes("student-life:read") ||
+            !payload.user.permissions.includes(requiredPermission)
+        ) {
             throw new Error("forbidden");
+        }
+        if (document.body.hasAttribute("data-community-page") && payload.user.schoolEmailVerified !== true) {
+            throw new Error("unverified-school-email");
         }
 
         const name = payload.user.displayName;
@@ -189,13 +276,17 @@ async function checkDashboardSession() {
         document.querySelectorAll("[data-user-role]").forEach((element) => {
             element.textContent = payload.user.role;
         });
-        const noticesReady = await loadNotices();
+        const noticesReady = document.querySelector("#notice-list") ? await loadNotices() : true;
         if (!noticesReady) return;
         document.body.classList.add("session-ready");
         guard.hidden = true;
     } catch (error) {
         if (error.message === "forbidden") {
             message.textContent = "Your school account doesn’t have permission to open this page. Contact your school administrator.";
+            document.querySelector("#session-link").textContent = "Return to Northstar";
+            document.querySelector("#session-link").href = "index.html";
+        } else if (error.message === "unverified-school-email") {
+            message.textContent = "Connect is available only to students with a verified NUTM school email. Contact your school administrator if you think this is a mistake.";
             document.querySelector("#session-link").textContent = "Return to Northstar";
             document.querySelector("#session-link").href = "index.html";
         } else {

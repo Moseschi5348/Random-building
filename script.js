@@ -40,6 +40,7 @@ function saveState() {
 
 function showToast(message) {
     const toast = document.querySelector("#toast");
+    if (!toast) return;
     toast.textContent = message;
     toast.classList.add("visible");
     window.clearTimeout(toastTimer);
@@ -48,10 +49,11 @@ function showToast(message) {
 
 function renderActivities() {
     const list = document.querySelector("#my-clubs-list");
-    list.replaceChildren();
+    if (list) list.replaceChildren();
 
     state.clubs.forEach((id) => {
         const club = clubDetails[id];
+        if (!list) return;
         const row = document.createElement("div");
         row.className = "my-club-row";
         const icon = document.createElement("span");
@@ -71,10 +73,14 @@ function renderActivities() {
     });
 
     const count = state.clubs.length;
-    document.querySelector("#club-count").textContent = count;
-    document.querySelector("#activity-count").textContent = `${count} active`;
-    document.querySelector("#activity-count").hidden = count === 0;
-    if (count === 0) {
+    const clubCount = document.querySelector("#club-count");
+    const activityCount = document.querySelector("#activity-count");
+    if (clubCount) clubCount.textContent = count;
+    if (activityCount) {
+        activityCount.textContent = `${count} active`;
+        activityCount.hidden = count === 0;
+    }
+    if (list && count === 0) {
         const empty = document.createElement("p");
         empty.className = "empty-state";
         empty.textContent = "You haven’t joined a club yet. Explore clubs to find your people.";
@@ -83,8 +89,10 @@ function renderActivities() {
 }
 
 function renderState() {
-    document.querySelector("#points-total").textContent = state.points.toLocaleString();
-    document.querySelector("#streak-count").textContent = state.streak;
+    const points = document.querySelector("#points-total");
+    const streak = document.querySelector("#streak-count");
+    if (points) points.textContent = state.points.toLocaleString();
+    if (streak) streak.textContent = state.streak;
     document.querySelectorAll(".join-button").forEach((button) => {
         const joined = state.clubs.includes(button.dataset.club);
         button.classList.toggle("joined", joined);
@@ -95,6 +103,7 @@ function renderState() {
 
     const checkedIn = state.checkInDate === new Date().toLocaleDateString("en-CA");
     const checkInButton = document.querySelector("#checkin-button");
+    if (!checkInButton) return;
     checkInButton.disabled = checkedIn;
     checkInButton.innerHTML = checkedIn ? "Checked in ✓" : 'Check in <span>→</span>';
     document.querySelector("#checkin-title").textContent = checkedIn ? "You’re all checked in!" : "Start your day strong";
@@ -121,7 +130,7 @@ document.querySelectorAll(".join-button").forEach((button) => {
     });
 });
 
-document.querySelectorAll(".filter-tab").forEach((tab) => {
+document.querySelectorAll(".filter-tab[data-filter]").forEach((tab) => {
     tab.addEventListener("click", () => {
         document.querySelector(".filter-tab.active")?.classList.remove("active");
         tab.classList.add("active");
@@ -130,8 +139,11 @@ document.querySelectorAll(".filter-tab").forEach((tab) => {
 });
 
 function updateClubVisibility() {
-    const filter = document.querySelector(".filter-tab.active").dataset.filter;
-    const query = document.querySelector("#club-search").value.trim().toLowerCase();
+    const activeTab = document.querySelector(".filter-tab[data-filter].active");
+    const search = document.querySelector("#club-search");
+    if (!activeTab || !search) return;
+    const filter = activeTab.dataset.filter;
+    const query = search.value.trim().toLowerCase();
     let visibleCount = 0;
     document.querySelectorAll(".club-card").forEach((card) => {
         const matchesCategory = filter === "all" || card.dataset.category === filter;
@@ -140,19 +152,24 @@ function updateClubVisibility() {
         card.hidden = !visible;
         if (visible) visibleCount += 1;
     });
-    document.querySelector("#empty-clubs").hidden = visibleCount > 0;
+    const emptyState = document.querySelector("#empty-clubs");
+    if (emptyState) emptyState.hidden = visibleCount > 0;
 }
 
-document.querySelector("#club-search").addEventListener("input", updateClubVisibility);
+const clubSearch = document.querySelector("#club-search");
+if (clubSearch) clubSearch.addEventListener("input", updateClubVisibility);
 
-document.querySelector("#checkin-button").addEventListener("click", () => {
-    state.checkInDate = new Date().toLocaleDateString("en-CA");
-    state.points += 10;
-    state.streak += 1;
-    saveState();
-    renderState();
-    showToast("You checked in! +10 points. Keep that streak alive.");
-});
+const checkInButton = document.querySelector("#checkin-button");
+if (checkInButton) {
+    checkInButton.addEventListener("click", () => {
+        state.checkInDate = new Date().toLocaleDateString("en-CA");
+        state.points += 10;
+        state.streak += 1;
+        saveState();
+        renderState();
+        showToast("You checked in! +10 points. Keep that streak alive.");
+    });
+}
 
 document.querySelectorAll(".nav-link").forEach((link) => {
     link.addEventListener("click", () => {

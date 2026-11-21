@@ -15,22 +15,23 @@
 <body data-protected-page>
     <div class="app-shell">
         <aside class="sidebar" aria-label="Main navigation">
-            <a class="brand" href="#overview" aria-label="Northstar home">
+            <a class="brand" href="home.html" aria-label="Northstar home">
                 <span class="brand-mark">N</span>
                 <span class="brand-copy">northstar<span>STUDENT LIFE</span></span>
             </a>
             <div class="nav-label">MENU</div>
             <nav class="main-nav">
-                <a class="nav-link active" href="#overview"><span class="nav-icon">⌂</span>Overview</a>
-                <a class="nav-link" href="#clubs"><span class="nav-icon">◈</span>Explore clubs<span class="nav-count">12</span></a>
-                <a class="nav-link" href="#my-activities"><span class="nav-icon">▤</span>My activities</a>
-                <a class="nav-link" href="#rewards"><span class="nav-icon">✳</span>Rewards</a>
+                <a class="nav-link active" href="home.html" aria-current="page"><span class="nav-icon">⌂</span>Overview</a>
+                <a class="nav-link" href="clubs.html"><span class="nav-icon">◈</span>Clubs<span class="nav-count">12</span></a>
+                <a class="nav-link" href="activities.html"><span class="nav-icon">▤</span>Activities</a>
+                <a class="nav-link" href="rewards.html"><span class="nav-icon">✳</span>Rewards</a>
+                <a class="nav-link" href="community.html"><span class="nav-icon">♡</span>Connect</a>
             </nav>
             <div class="sidebar-card">
                 <span class="sidebar-sparkle">✦</span>
                 <p class="sidebar-card-title">Club meetings this week</p>
                 <p>Check your schedule before heading to your next activity.</p>
-                <a href="#my-activities">View my activities <span>→</span></a>
+                <a href="activities.html">View my activities <span>→</span></a>
             </div>
             <div class="sidebar-profile">
                 <div class="avatar avatar-small" data-user-initials>JM</div>
@@ -45,7 +46,7 @@
                 <div class="topbar-actions">
                     <span class="school-year">2026–27 <span class="year-dot"></span></span>
                     <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme" aria-pressed="false"><span class="theme-icon">☾</span><span class="theme-label">Dark</span></button>
-                    <button class="notification-button" aria-label="Notifications">♧<span></span></button>
+                    <a class="notification-button" href="#notices" aria-label="Campus notices">♧<span></span></a>
                     <div class="avatar avatar-top" data-user-initials>JM</div>
                 </div>
             </header>
@@ -55,10 +56,10 @@
                     <h1>Welcome back, <span data-user-first>Jordan</span>.</h1>
                     <p class="welcome-copy">Your clubs, attendance, and upcoming activities at a glance.</p>
                 </div>
-                <a href="#clubs" class="button button-primary"><span>＋</span> Find a club</a>
+                <a href="clubs.html" class="button button-primary"><span>＋</span> Find a club</a>
             </section>
 
-            <section class="notice-center" aria-label="Campus notices">
+            <section class="notice-center" id="notices" aria-label="Campus notices">
                 <div class="notice-center-heading">
                     <div><p class="section-kicker">CAMPUS UPDATES</p><h2>Notices</h2></div>
                     <div class="notice-level-key" aria-label="Notice levels">
@@ -123,7 +124,7 @@
                 <article class="panel next-up-panel">
                     <div class="panel-heading">
                         <div><p class="section-kicker">ON YOUR CALENDAR</p><h2>Coming up</h2></div>
-                        <a class="text-link" href="#my-activities">View all <span>→</span></a>
+                        <a class="text-link" href="activities.html">View all <span>→</span></a>
                     </div>
                     <div class="event-card">
                         <div class="event-date"><strong>17</strong><span>MAR</span></div>
@@ -135,68 +136,10 @@
                         <div class="event-info"><strong>Spring showcase prep</strong><span>Art & Design · 3:15 PM</span><span class="event-location">⌖ Studio 204</span></div>
                         <span class="event-arrow">↗</span>
                     </div>
-                    <a href="#my-activities" class="calendar-link">Open activity calendar <span>→</span></a>
+                    <a href="activities.html" class="calendar-link">Open activity calendar <span>→</span></a>
                 </article>
             </section>
 
-            <section class="panel clubs-panel" id="clubs">
-                <div class="panel-heading clubs-heading">
-                    <div>                    <p class="section-kicker">CLUBS & ACTIVITIES</p><h2>Explore clubs</h2><p class="panel-subtitle">See what’s available and when each club meets.</p></div>
-                    <a class="text-link browse-link" href="#clubs">Browse all clubs <span>→</span></a>
-                </div>
-                <div class="club-tools">
-                    <div class="filter-tabs" role="group" aria-label="Filter clubs by category">
-                        <button class="filter-tab active" data-filter="all">All clubs <span>12</span></button>
-                        <button class="filter-tab" data-filter="creative">Creative</button>
-                        <button class="filter-tab" data-filter="stem">STEM</button>
-                        <button class="filter-tab" data-filter="community">Community</button>
-                    </div>
-                    <label class="search-box"><span>⌕</span><input id="club-search" type="search" placeholder="Search clubs..." aria-label="Search clubs"></label>
-                </div>
-                <div class="club-grid" id="club-grid">
-                    <article class="club-card" data-category="stem" data-name="robotics club build code compete">
-                        <div class="club-art robotics-art"><span>🤖</span><span class="art-spark">✦</span></div>
-                        <div class="club-card-content"><div class="club-meta"><span class="category-pill pill-stem">STEM</span><span class="member-count">◉ 18 members</span></div><h3>Robotics Club</h3><p>Build and program robots with a team. Beginners are welcome.</p><div class="club-card-bottom"><span>Wednesdays · 3:30 PM</span><button class="join-button joined" data-club="robotics">Joined ✓</button></div></div>
-                    </article>
-                    <article class="club-card" data-category="creative" data-name="art design studio paint create">
-                        <div class="club-art art-art"><span>🎨</span><span class="art-spark">✦</span></div>
-                        <div class="club-card-content"><div class="club-meta"><span class="category-pill pill-creative">CREATIVE</span><span class="member-count">◉ 24 members</span></div><h3>Art & Design Studio</h3><p>Work on drawing, painting, and design projects together.</p><div class="club-card-bottom"><span>Fridays · 3:15 PM</span><button class="join-button joined" data-club="art">Joined ✓</button></div></div>
-                    </article>
-                    <article class="club-card" data-category="community" data-name="green team garden sustainability">
-                        <div class="club-art green-art"><span>🌱</span><span class="art-spark">✦</span></div>
-                        <div class="club-card-content"><div class="club-meta"><span class="category-pill pill-community">COMMUNITY</span><span class="member-count">◉ 16 members</span></div><h3>Green Team</h3><p>Help with the school garden and sustainability projects.</p><div class="club-card-bottom"><span>Tuesdays · 3:20 PM</span><button class="join-button" data-club="green">Join club <span>＋</span></button></div></div>
-                    </article>
-                    <article class="club-card" data-category="stem" data-name="coding collective programming games">
-                        <div class="club-art coding-art"><span>💻</span><span class="art-spark">✦</span></div>
-                        <div class="club-card-content"><div class="club-meta"><span class="category-pill pill-stem">STEM</span><span class="member-count">◉ 21 members</span></div><h3>Coding Collective</h3><p>Learn programming basics and build small projects together.</p><div class="club-card-bottom"><span>Mondays · 3:30 PM</span><button class="join-button" data-club="coding">Join club <span>＋</span></button></div></div>
-                    </article>
-                </div>
-                <p class="empty-state" id="empty-clubs" hidden>No clubs match that search. Try another name or category.</p>
-            </section>
-
-            <section class="lower-grid">
-                <article class="panel activities-panel" id="my-activities">
-                    <div class="panel-heading"><div><p class="section-kicker">YOUR COMMITMENTS</p><h2>My activities</h2></div><span class="small-count" id="activity-count">2 active</span></div>
-                    <div class="my-clubs-list" id="my-clubs-list">
-                        <div class="my-club-row" data-activity="robotics"><span class="mini-club-icon mini-robot">🤖</span><div><strong>Robotics Club</strong><span>Next meetup · Wed, Mar 17</span></div><span class="activity-status">Active</span></div>
-                        <div class="my-club-row" data-activity="art"><span class="mini-club-icon mini-art">🎨</span><div><strong>Art & Design Studio</strong><span>Next meetup · Fri, Mar 19</span></div><span class="activity-status">Active</span></div>
-                    </div>
-                    <a class="calendar-link" href="#clubs">Discover another club <span>→</span></a>
-                </article>
-                <article class="panel rewards-panel" id="rewards">
-                    <div class="panel-heading"><div><p class="section-kicker">POINTS & BADGES</p><h2>Your rewards</h2></div><a class="text-link" href="#rewards">All badges <span>→</span></a></div>
-                    <div class="reward-progress">
-                        <div class="reward-copy"><span>Next badge</span><strong>Early Bird</strong><span>2 more on-time mornings to go</span></div>
-                        <div class="progress-ring" aria-label="Progress: 5 out of 7 mornings"><div><strong>5</strong><span>/ 7</span></div></div>
-                    </div>
-                    <div class="badges-row" aria-label="Recently earned badges">
-                        <div class="badge-item"><span class="badge-icon badge-sun">☀</span><span>Bright start</span></div>
-                        <div class="badge-item"><span class="badge-icon badge-star">★</span><span>Team player</span></div>
-                        <div class="badge-item"><span class="badge-icon badge-heart">♥</span><span>Good energy</span></div>
-                        <button class="badge-item locked-badge" title="Keep earning points to unlock"><span class="badge-icon">?</span><span>Locked</span></button>
-                    </div>
-                </article>
-            </section>
             <footer class="page-footer"><span>Student activities portal.</span><span>Northstar Academy · Student life</span></footer>
         </main>
     </div>
