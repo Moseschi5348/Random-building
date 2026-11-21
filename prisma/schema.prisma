@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  CLUB_LEADER
+  ADMIN
+}
+
+enum MembershipStatus {
+  PENDING
+  ACTIVE
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  EXPIRED
+}
+
+enum PaymentType {
+  MEMBERSHIP
+  ACTIVITY
+}
+
+model User {
+  id           String       @id @default(cuid())
+  name         String       @db.VarChar(120)
+  email        String       @unique @db.VarChar(254)
+  passwordHash String
+  role         UserRole     @default(STUDENT)
+  points       Int          @default(0)
+  isActive     Boolean      @default(true)
+  memberships  Membership[]
+  registrations ActivityRegistration[]
+  attendance   Attendance[]
+  badges       UserBadge[]
+  payments     Payment[]
+  ledClubs     Club[]       @relation("ClubLeader")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model Club {
+  id              String       @id @default(cuid())
+  name            String       @db.VarChar(120)
+  description     String       @db.VarChar(2000)
+  membershipFeeCents Int       @default(0)
+  leaderId        String
+  leader          User         @relation("ClubLeader", fields: [leaderId], references: [id], onDelete: Restrict)
+  memberships     Membership[]
+  activities      Activity[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model Membership {
+  id        String           @id @default(cuid())
+  userId    String
+  clubId    String
+  status    MembershipStatus @default(PENDING)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club      Club             @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  payments  Payment[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([userId, clubId])
+}
+
+model Activity {
+  id              String                  @id @default(cuid())
+  clubId          String
+  title           String                  @db.VarChar(160)
+  description     String                  @db.VarChar(2000)
+  startsAt        DateTime
+  registrationFeeCents Int                 @default(0)
+  club            Club                    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  registrations   ActivityRegistration[]
+  attendance      Attendance[]
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+}
+
+model ActivityRegistration {
+  id         String             @id @default(cuid())
+  userId     String
+  activityId String
+  status     RegistrationStatus @default(PENDING)
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activity   Activity           @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  payments   Payment[]
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@unique([userId, activityId])
+}
+
+model Attendance {
+  id          String   @id @default(cuid())
+  userId      String
+  activityId  String
+  punctual    Boolean  @default(false)
+  goodConduct Boolean  @default(false)
+  pointsAwarded Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activity    Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, activityId])
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String   @db.VarChar(64)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  awardedAt DateTime @default(now())
+
+  @@unique([userId, key])
+}
+
+model Payment {
+  id                       String        @id @default(cuid())
+  userId                   String
+  membershipId             String?
+  activityRegistrationId   String?
+  type                     PaymentType
+  status                   PaymentStatus @default(PENDING)
+  amountCents              Int
+  currency                 String        @default("usd") @db.VarChar(3)
+  stripeCheckoutSessionId  String?       @unique
+  user                     User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  membership               Membership?   @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  activityRegistration     ActivityRegistration? @relation(fields: [activityRegistrationId], references: [id], onDelete: Restrict)
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+
+  @@index([userId, createdAt])
+}
