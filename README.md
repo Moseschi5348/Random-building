@@ -1,29 +1,36 @@
 # DIS backend
 
-Backend API for club discovery, membership and activity registration, Stripe payments, attendance, points, and badges.
+Backend API for clubs, activity registration, Stripe payments, attendance, points, badges, and school-email accounts.
+
+GitHub stores this project's source code and migrations. Student and activity records are stored in the managed PostgreSQL database configured by `DATABASE_URL`.
 
 ## Requirements
 
 - Node.js 20+
-- PostgreSQL
+- Managed PostgreSQL
+- A Microsoft 365 school mailbox and Entra app registration for Microsoft Graph email
 - A Stripe account (test mode is sufficient for local development)
 
-## Local setup
+## Setup
 
-1. Install packages: `npm install`
-2. Copy `.env.example` to `.env` and set the database URL, a random JWT secret of at least 32 characters, Stripe test keys, and the frontend URL/origin.
-3. Create the PostgreSQL database named in `DATABASE_URL`.
-4. Run `npx prisma migrate dev --name init`.
-5. Set `ADMIN_EMAIL` and a strong `ADMIN_PASSWORD`, then run `npm run db:seed`.
-6. Start the API with `npm run dev`.
+1. Install packages with `npm install`.
+2. Create a confidential app in the NUTM Microsoft Entra tenant. Grant Microsoft Graph **application** permission `Mail.Send` and have a tenant administrator grant consent. Use a NUTM mailbox such as `no-reply@nutm.edu.ng` as the sender.
+3. Copy `.env.example` to `.env`. Set the managed database URL, a random `OTP_HASH_SECRET` of at least 32 characters, Graph tenant/client IDs, Graph client secret, sender email, and Stripe test keys. Keep secrets server-side; never commit `.env` or put credentials in frontend code.
+4. Run `npx prisma migrate deploy` to apply the database migrations.
+5. Set `ADMIN_EMAIL` to the administrator's NUTM email and run `npm run db:seed`. The administrator then registers with that address and verifies it by OTP; the seeded administrator role is retained.
+6. Run `npm run dev` and open `http://localhost:3000`. The Express server serves the frontend and API from the same origin.
 
-The API listens on port 3000 by default. `GET /health` checks that the process is responding. Stripe test webhooks can be forwarded with:
+The backend accepts only addresses ending in `@nutm.edu.ng`. Registration sends a six-digit code through Microsoft Graph. Codes expire after ten minutes, allow at most five attempts, and are stored only as keyed hashes. Accounts are created and signed in only after email verification. Sign-in afterward uses the verified school email and password.
+
+For production, use HTTPS, production Stripe keys, a production Graph secret stored in the host's secret manager, and a production managed PostgreSQL URL.
+
+Stripe test webhooks can be forwarded locally with:
 
 ```text
 stripe listen --forward-to localhost:3000/api/webhooks/stripe
 ```
 
-Set `STRIPE_WEBHOOK_SECRET` to the signing secret printed by Stripe CLI. Never commit `.env` or use test keys in production.
+Set `STRIPE_WEBHOOK_SECRET` to the signing secret printed by Stripe CLI.
 
 ## Main endpoints
 
@@ -31,9 +38,13 @@ All API paths are under `/api`.
 
 | Method | Path | Access |
 | --- | --- | --- |
-| POST | `/auth/register`, `/auth/login` | Public |
+| POST | `/auth/register` | Public; NUTM email only, sends OTP |
+| POST | `/auth/verify-email` | Public; verifies OTP and creates account |
+| POST | `/auth/resend-verification` | Public; throttled |
+| POST | `/auth/login` | Public; verified account required |
+| GET | `/auth/session` | Signed-in user |
+| POST | `/auth/logout` | Signed-in user; CSRF protected |
 | GET | `/me` | Signed-in user |
-| PATCH | `/me/password` | Signed-in user |
 | GET | `/clubs` | Public |
 | POST | `/clubs` | Administrator |
 | POST | `/clubs/:clubId/join` | Signed-in user |
@@ -44,8 +55,10 @@ All API paths are under `/api`.
 | GET | `/leaderboard` | Signed-in user |
 | PATCH | `/users/:userId/role` | Administrator |
 | POST | `/webhooks/stripe` | Stripe-signed webhook |
+| GET | `/student-life/notices` | Signed-in user |
+| POST | `/student-life/notices` | Administrator |
 
-Use `Authorization: Bearer <accessToken>` for signed-in routes. New accounts are students; administrators assign club leader and administrator roles. A club leader must be assigned the `CLUB_LEADER` role before an administrator can create a club for them.
+The browser uses an HTTP-only session cookie and a CSRF token for state-changing requests. New accounts are students; administrators assign club-leader roles. A club leader must be assigned the `CLUB_LEADER` role before an administrator can create a club for them.
 
 Membership and activity fees are one-time charges set in cents by administrators and club leaders, never accepted from checkout requests. Paid sign-ups return a Stripe Checkout URL and remain pending until a signed, verified Stripe webhook confirms payment. The API does not collect or store card details. Free sign-ups are confirmed immediately.
 
@@ -53,8 +66,9 @@ Attendance awards 10 participation points, plus 5 for punctuality and 3 for good
 
 ## Security baseline
 
-- Passwords are hashed with bcrypt; role assignment is never accepted at public registration.
-- Authenticated requests reload the current user role from PostgreSQL; access tokens expire after 15 minutes by default.
-- Helmet, exact-origin CORS, request-size limits, and rate limits protect API requests. Authentication endpoints have a stricter rate limit.
+- Registration and sign-in enforce the `@nutm.edu.ng` domain server-side.
+- Passwords use bcrypt; OTPs use cryptographic randomness, HMAC storage, expiry, attempt limits, and rate limits.
+- Microsoft Graph credentials are used only on the backend to send mail.
+- Browser sessions expire after eight hours; only hashes of session tokens are stored in PostgreSQL.
+- Helmet, exact-origin CORS, request-size limits, CSRF protections, and role/record-level authorization protect API requests.
 - Stripe Checkout is hosted by Stripe. Webhook signatures and payment amount/currency are validated before activating registrations.
-- Keep secrets in environment variables or a deployment secret manager. Configure HTTPS and production CORS origins before deployment.

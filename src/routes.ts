@@ -1,29 +1,61 @@
-import { Router, type Request } from "express";
+import { Router, type Request, type Response } from "express";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import {
   MembershipStatus,
+  NoticeLevel,
   RegistrationStatus,
   UserRole,
   type PrismaClient,
 } from "@prisma/client";
 import type Stripe from "stripe";
-import { requireAuth, requireRole } from "./auth";
+import {
+  clearSessionCookie,
+  createSessionCredentials,
+  permissionsForRole,
+  requireAuth,
+  requirePermission,
+  requireRole,
+  setSessionCookie,
+} from "./auth";
 import type { AppConfig } from "./config";
+import { GraphOtpMailer } from "./email";
 import { HttpError, parseBody } from "./http";
+import {
+  createOtp,
+  hashOtp,
+  isSchoolEmail,
+  OTP_MAX_ATTEMPTS,
+  OTP_RESEND_COOLDOWN_MS,
+  OTP_TTL_MS,
+  verifyOtp,
+} from "./otp";
 import { applyStripeEvent, createCheckoutSession } from "./payments";
 import { z } from "zod";
 
+const schoolEmailSchema = z.string()
+  .trim()
+  .email()
+  .max(254)
+  .transform((value) => value.toLowerCase())
+  .refine(isSchoolEmail, "Use your NUTM school email ending in @nutm.edu.ng.");
+
 const registerSchema = z.object({
   name: z.string().trim().min(1).max(120),
-  email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
+  email: schoolEmailSchema,
   password: z.string().min(12).max(128),
 });
 
 const loginSchema = z.object({
-  email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
+  email: schoolEmailSchema,
   password: z.string().min(1).max(128),
 });
+
+const verifyEmailSchema = z.object({
+  email: schoolEmailSchema,
+  code: z.string().regex(/^\d{6}$/, "Enter the six-digit verification code."),
+});
+
+const resendVerificationSchema = z.object({ email: schoolEmailSchema });
 
 const clubSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -45,6 +77,13 @@ const attendanceSchema = z.object({
   goodConduct: z.boolean().default(false),
 });
 
+const noticeSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  message: z.string().trim().min(1).max(2000),
+  level: z.enum(["emergency", "important", "general"]),
+  endsAt: z.string().datetime().transform((value) => new Date(value)).optional(),
+});
+
 const dummyPasswordHash = bcrypt.hashSync("unreachable-dummy-password", 12);
 
 function currentUserId(req: Request): string {
@@ -62,15 +101,82 @@ function routeParam(req: Request, name: string): string {
   return value;
 }
 
-function issueAccessToken(
-  user: { id: string; role: UserRole },
-  secret: string,
-  expiresIn: string,
-): string {
-  return jwt.sign({ role: user.role }, secret, {
-    subject: user.id,
-    expiresIn: expiresIn as jwt.SignOptions["expiresIn"],
+async function createLoginSession(
+  prisma: PrismaClient,
+  userId: string,
+  secureCookie: boolean,
+  res: Response,
+): Promise<void> {
+  const credentials = createSessionCredentials();
+  await prisma.session.deleteMany({ where: { expiresAt: { lte: new Date() } } });
+  await prisma.session.create({
+    data: {
+      userId,
+      tokenHash: credentials.tokenHash,
+      csrfToken: credentials.csrfToken,
+      expiresAt: credentials.expiresAt,
+    },
   });
+  setSessionCookie(res, credentials.token, secureCookie);
+}
+
+async function sendRegistrationCode(
+  prisma: PrismaClient,
+  mailer: GraphOtpMailer | null,
+  email: string,
+  name: string,
+  passwordHash: string,
+  otpHashSecret: string,
+): Promise<void> {
+  if (!mailer) {
+    throw new HttpError(503, "Verification email delivery has not been configured.");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { emailVerified: true },
+  });
+  if (user?.emailVerified) {
+    throw new HttpError(409, "An account with this school email already exists. Sign in instead.");
+  }
+
+  const previous = await prisma.registrationChallenge.findUnique({ where: { email } });
+  if (
+    previous &&
+    Date.now() - previous.createdAt.getTime() < OTP_RESEND_COOLDOWN_MS
+  ) {
+    throw new HttpError(429, "Wait a minute before requesting another verification code.");
+  }
+
+  const code = createOtp();
+  const otpHash = hashOtp(email, code, otpHashSecret);
+  const now = new Date();
+  await prisma.registrationChallenge.upsert({
+    where: { email },
+    update: {
+      name,
+      passwordHash,
+      otpHash,
+      attempts: 0,
+      expiresAt: new Date(now.getTime() + OTP_TTL_MS),
+      createdAt: now,
+    },
+    create: {
+      email,
+      name,
+      passwordHash,
+      otpHash,
+      expiresAt: new Date(now.getTime() + OTP_TTL_MS),
+      createdAt: now,
+    },
+  });
+
+  try {
+    await mailer.sendVerificationCode(email, code);
+  } catch (error) {
+    console.error("Microsoft Graph could not send a registration verification code.", error);
+    throw new HttpError(502, "We couldn't send a verification code. Please try again later.");
+  }
 }
 
 async function assertClubManager(
@@ -100,19 +206,133 @@ export function createApiRouter(
   config: AppConfig,
 ): Router {
   const router = Router();
-  const auth = requireAuth(prisma, config.jwtSecret);
+  const auth = requireAuth(prisma);
+  const otpMailer = config.graph ? new GraphOtpMailer(config.graph) : null;
 
   router.post("/auth/register", async (req, res) => {
     const body = parseBody(registerSchema, req.body);
+    if (!otpMailer) {
+      throw new HttpError(503, "Verification email delivery has not been configured.");
+    }
     const passwordHash = await bcrypt.hash(body.password, 12);
-    const user = await prisma.user.create({
-      data: { name: body.name, email: body.email, passwordHash },
-      select: { id: true, name: true, email: true, role: true, points: true },
+    await sendRegistrationCode(
+      prisma,
+      otpMailer,
+      body.email,
+      body.name,
+      passwordHash,
+      config.otpHashSecret,
+    );
+    res.status(202).json({ message: "A verification code was sent to your school email." });
+  });
+
+  router.post("/auth/resend-verification", async (req, res) => {
+    const body = parseBody(resendVerificationSchema, req.body);
+    const challenge = await prisma.registrationChallenge.findUnique({
+      where: { email: body.email },
     });
-    res.status(201).json({
-      user,
-      accessToken: issueAccessToken(user, config.jwtSecret, config.jwtExpiresIn),
+    if (!challenge) {
+      res.status(202).json({ message: "If the account is eligible, a new code has been sent." });
+      return;
+    }
+
+    await sendRegistrationCode(
+      prisma,
+      otpMailer,
+      challenge.email,
+      challenge.name,
+      challenge.passwordHash,
+      config.otpHashSecret,
+    );
+    res.status(202).json({ message: "If the account is eligible, a new code has been sent." });
+  });
+
+  router.post("/auth/verify-email", async (req, res) => {
+    const body = parseBody(verifyEmailSchema, req.body);
+    const outcome = await prisma.$transaction(async (tx) => {
+      const challenge = await tx.registrationChallenge.findUnique({
+        where: { email: body.email },
+      });
+      if (!challenge) return { kind: "invalid" as const };
+
+      const now = new Date();
+      if (challenge.expiresAt <= now) {
+        await tx.registrationChallenge.deleteMany({ where: { email: body.email } });
+        return { kind: "expired" as const };
+      }
+      if (challenge.attempts >= OTP_MAX_ATTEMPTS) {
+        return { kind: "locked" as const };
+      }
+      if (!verifyOtp(body.email, body.code, challenge.otpHash, config.otpHashSecret)) {
+        const updated = await tx.registrationChallenge.updateMany({
+          where: {
+            email: body.email,
+            otpHash: challenge.otpHash,
+            attempts: { lt: OTP_MAX_ATTEMPTS },
+            expiresAt: { gt: now },
+          },
+          data: { attempts: { increment: 1 } },
+        });
+        return { kind: updated.count === 1 ? "incorrect" as const : "locked" as const };
+      }
+
+      const claimed = await tx.registrationChallenge.deleteMany({
+        where: {
+          email: body.email,
+          otpHash: challenge.otpHash,
+          attempts: { lt: OTP_MAX_ATTEMPTS },
+          expiresAt: { gt: now },
+        },
+      });
+      if (claimed.count !== 1) return { kind: "invalid" as const };
+
+      const existing = await tx.user.findUnique({ where: { email: body.email } });
+      if (existing?.emailVerified) return { kind: "already-verified" as const };
+      if (existing && !existing.isActive) return { kind: "inactive" as const };
+
+      const user = existing
+        ? await tx.user.update({
+            where: { id: existing.id },
+            data: {
+              name: challenge.name,
+              passwordHash: challenge.passwordHash,
+              emailVerified: true,
+            },
+            select: { id: true, name: true, email: true, role: true },
+          })
+        : await tx.user.create({
+            data: {
+              email: body.email,
+              name: challenge.name,
+              passwordHash: challenge.passwordHash,
+              emailVerified: true,
+            },
+            select: { id: true, name: true, email: true, role: true },
+          });
+      return { kind: "verified" as const, user };
     });
+
+    if (outcome.kind === "incorrect") {
+      throw new HttpError(400, "The verification code is incorrect.");
+    }
+    if (outcome.kind === "expired" || outcome.kind === "invalid") {
+      throw new HttpError(400, "The verification code is invalid or expired.");
+    }
+    if (outcome.kind === "locked") {
+      throw new HttpError(429, "Too many incorrect codes. Request a new verification code.");
+    }
+    if (outcome.kind === "already-verified") {
+      throw new HttpError(409, "This school email already has an account. Sign in instead.");
+    }
+    if (outcome.kind === "inactive") {
+      throw new HttpError(403, "This school account is inactive. Contact the school administrator.");
+    }
+    if (outcome.kind !== "verified") {
+      throw new HttpError(400, "The verification code could not be used. Request a new code.");
+    }
+
+    await createLoginSession(prisma, outcome.user.id, config.nodeEnv === "production", res);
+    res.status(201).json({ user: outcome.user });
   });
 
   router.post("/auth/login", async (req, res) => {
@@ -120,24 +340,94 @@ export function createApiRouter(
     const user = await prisma.user.findUnique({ where: { email: body.email } });
     const passwordMatches = await bcrypt.compare(
       body.password,
-      user?.isActive ? user.passwordHash : dummyPasswordHash,
+      user?.passwordHash ?? dummyPasswordHash,
     );
-    if (!user || !user.isActive || !passwordMatches) {
+    if (!user || !user.isActive || !user.emailVerified || !user.passwordHash || !passwordMatches) {
       throw new HttpError(401, "Email or password is incorrect.");
+    }
+
+    await createLoginSession(prisma, user.id, config.nodeEnv === "production", res);
+    res.json({
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    });
+  });
+
+  router.get("/auth/session", auth, requirePermission("student-life:read"), async (req, res) => {
+    const user = await prisma.user.findUnique({
+      where: { id: currentUserId(req) },
+      select: { id: true, name: true, role: true, isActive: true, emailVerified: true },
+    });
+    if (!user || !user.isActive) {
+      throw new HttpError(401, "The account is unavailable.");
     }
     res.json({
       user: {
         id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        points: user.points,
+        displayName: user.name,
+        role: user.role.toLowerCase().replaceAll("_", "-"),
+        permissions: permissionsForRole(user.role),
+        schoolEmailVerified: user.emailVerified,
       },
-      accessToken: issueAccessToken(user, config.jwtSecret, config.jwtExpiresIn),
+      csrfToken: req.user?.csrfToken ?? null,
     });
   });
 
-  router.get("/me", auth, async (req, res) => {
+  router.post("/auth/logout", auth, async (req, res) => {
+    if (req.user?.sessionId) {
+      await prisma.session.deleteMany({ where: { id: req.user.sessionId } });
+    }
+    clearSessionCookie(res, config.nodeEnv === "production");
+    res.status(204).send();
+  });
+
+  router.get(
+    "/student-life/notices",
+    auth,
+    requirePermission("student-life:read"),
+    async (_req, res) => {
+    const now = new Date();
+    const notices = await prisma.studentLifeNotice.findMany({
+      where: {
+        isActive: true,
+        startsAt: { lte: now },
+        OR: [{ endsAt: null }, { endsAt: { gte: now } }],
+      },
+      orderBy: { startsAt: "desc" },
+      select: { level: true, title: true, message: true },
+    });
+      res.json({
+        notices: notices.map((notice) => ({
+          ...notice,
+          level: notice.level.toLowerCase(),
+        })),
+      });
+    },
+  );
+
+  router.post("/student-life/notices", auth, requireRole(UserRole.ADMIN), async (req, res) => {
+      const body = parseBody(noticeSchema, req.body);
+      if (body.endsAt && body.endsAt <= new Date()) {
+        throw new HttpError(400, "Notice expiration must be in the future.");
+      }
+      const levels = {
+        emergency: NoticeLevel.EMERGENCY,
+        important: NoticeLevel.IMPORTANT,
+        general: NoticeLevel.GENERAL,
+      };
+      const notice = await prisma.studentLifeNotice.create({
+        data: {
+          title: body.title,
+          message: body.message,
+          level: levels[body.level],
+          endsAt: body.endsAt,
+        },
+      });
+      res.status(201).json({
+        notice: { ...notice, level: notice.level.toLowerCase() },
+      });
+  });
+
+  router.get("/me", auth, requirePermission("student-life:read"), async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id: currentUserId(req) },
       select: {
@@ -170,42 +460,13 @@ export function createApiRouter(
           },
           orderBy: { createdAt: "desc" },
         },
+        _count: { select: { attendance: true } },
       },
     });
     if (!user) {
       throw new HttpError(404, "User not found.");
     }
     res.json(user);
-  });
-
-  router.patch("/me/password", auth, async (req, res) => {
-    const body = parseBody(
-      z.object({
-        currentPassword: z.string().min(1).max(128),
-        newPassword: z.string().min(12).max(128),
-      }),
-      req.body,
-    );
-    if (body.currentPassword === body.newPassword) {
-      throw new HttpError(400, "New password must be different from the current password.");
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: currentUserId(req) },
-      select: { passwordHash: true },
-    });
-    if (!user) {
-      throw new HttpError(404, "User not found.");
-    }
-    if (!(await bcrypt.compare(body.currentPassword, user.passwordHash))) {
-      throw new HttpError(401, "The current password is incorrect.");
-    }
-
-    await prisma.user.update({
-      where: { id: currentUserId(req) },
-      data: { passwordHash: await bcrypt.hash(body.newPassword, 12) },
-    });
-    res.status(204).send();
   });
 
   router.patch("/users/:userId/role", auth, requireRole(UserRole.ADMIN), async (req, res) => {
@@ -319,6 +580,7 @@ export function createApiRouter(
       orderBy: { startsAt: "asc" },
       select: {
         id: true,
+        clubId: true,
         title: true,
         description: true,
         startsAt: true,

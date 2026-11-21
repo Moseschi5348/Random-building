@@ -43,14 +43,14 @@
                 </div>
                 <p class="login-kicker">WELCOME BACK</p>
                 <h2>Sign in to Northstar</h2>
-                <p class="login-intro">Use the school account provided to you.</p>
+                <p class="login-intro">Sign in with your verified NUTM email and password.</p>
 
                 <div class="login-error" id="login-error" role="alert" hidden></div>
                 <form id="login-form" novalidate>
-                    <label class="form-label" for="email">School email</label>
-                    <div class="input-wrap"><span class="input-icon">✉</span><input id="email" name="email" type="email" autocomplete="username" placeholder="you@school.edu" required></div>
-                    <div class="password-label"><label class="form-label" for="password">Password</label><a href="#support">Need help signing in?</a></div>
-                    <div class="input-wrap"><span class="input-icon">⌑</span><input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required><button class="password-toggle" id="password-toggle" type="button" aria-label="Show password" aria-pressed="false">Show</button></div>
+                    <label class="form-label" for="email">NUTM school email</label>
+                    <div class="input-wrap"><span class="input-icon" aria-hidden="true">✉</span><input id="email" name="email" type="email" autocomplete="username" placeholder="eevans@nutm.edu.ng" required></div>
+                    <label class="form-label" for="password">Password</label>
+                    <div class="input-wrap"><span class="input-icon" aria-hidden="true">⌑</span><input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required></div>
                     <button class="login-submit" id="login-submit" type="submit"><span class="submit-label">Sign in</span><span class="submit-arrow">→</span></button>
                     <p class="login-status" id="login-status" role="status" aria-live="polite"></p>
                 </form>

@@ -2,20 +2,149 @@ const loginForm = document.querySelector("#login-form");
 const loginError = document.querySelector("#login-error");
 const loginStatus = document.querySelector("#login-status");
 const loginButton = document.querySelector("#login-submit");
-const loginEndpoint = "/api/auth/login";
 const registerForm = document.querySelector("#register-form");
 const registerError = document.querySelector("#register-error");
 const registerStatus = document.querySelector("#register-status");
 const registerButton = document.querySelector("#register-submit");
+let pendingVerificationEmail = "";
 
-function setLoginMessage(message, isError) {
-    loginError.hidden = !isError;
-    loginError.textContent = isError ? message : "";
-    loginStatus.textContent = isError ? "" : message;
+function showFormError(target, message) {
+    target.hidden = !message;
+    target.textContent = message;
+}
+
+async function postJson(path, body) {
+    const response = await fetch(path, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            ...(window.northstarCsrfToken
+                ? { "X-CSRF-Token": window.northstarCsrfToken }
+                : {})
+        },
+        body: JSON.stringify(body)
+    });
+    const result = response.status === 204 ? null : await response.json();
+    if (!response.ok) {
+        throw new Error(result?.error || `Request failed (${response.status}).`);
+    }
+    return result;
+}
+
+if (loginError && new URLSearchParams(window.location.search).has("error")) {
+    showFormError(loginError, "We couldn’t complete that request. Please try again or contact your school administrator.");
+}
+
+if (loginForm) {
+    loginForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        showFormError(loginError, "");
+        loginStatus.textContent = "";
+        if (!loginForm.reportValidity()) return;
+
+        loginButton.disabled = true;
+        try {
+            await postJson("/api/auth/login", {
+                email: loginForm.elements.email.value.trim(),
+                password: loginForm.elements.password.value
+            });
+            window.location.replace("home.html");
+        } catch (error) {
+            showFormError(loginError, error.message || "We couldn’t sign you in. Check your email and password.");
+        } finally {
+            loginButton.disabled = false;
+        }
+    });
+}
+
+if (registerForm) {
+    const passwordInput = registerForm.elements.password;
+    const confirmPasswordInput = registerForm.elements.confirmPassword;
+    const verificationPanel = document.querySelector("#verification-panel");
+    const verificationEmail = document.querySelector("#verification-email");
+    const verifyForm = document.querySelector("#verify-email-form");
+    const verifyError = document.querySelector("#verify-error");
+    const verifyStatus = document.querySelector("#verify-status");
+    const verifyButton = document.querySelector("#verify-submit");
+    const resendButton = document.querySelector("#resend-code");
+
+    registerForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        showFormError(registerError, "");
+        registerStatus.textContent = "";
+
+        if (!registerForm.reportValidity()) return;
+        const email = registerForm.elements.email.value.trim().toLowerCase();
+        if (!email.endsWith("@nutm.edu.ng")) {
+            showFormError(registerError, "Use your school email address ending in @nutm.edu.ng.");
+            return;
+        }
+        if (passwordInput.value !== confirmPasswordInput.value) {
+            showFormError(registerError, "The passwords don’t match. Please check them and try again.");
+            confirmPasswordInput.focus();
+            return;
+        }
+
+        registerButton.disabled = true;
+        try {
+            const result = await postJson("/api/auth/register", {
+                name: registerForm.elements.name.value.trim(),
+                email,
+                password: passwordInput.value
+            });
+            pendingVerificationEmail = email;
+            verificationEmail.textContent = email;
+            registerForm.hidden = true;
+            verificationPanel.hidden = false;
+            verifyStatus.textContent = result.message || "Enter the six-digit code sent to your school email.";
+            verifyForm.elements.code.focus();
+        } catch (error) {
+            showFormError(registerError, error.message || "We couldn’t start account verification. Please try again.");
+        } finally {
+            registerButton.disabled = false;
+        }
+    });
+
+    verifyForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        showFormError(verifyError, "");
+        if (!verifyForm.reportValidity()) return;
+
+        verifyButton.disabled = true;
+        try {
+            await postJson("/api/auth/verify-email", {
+                email: pendingVerificationEmail,
+                code: verifyForm.elements.code.value.trim()
+            });
+            window.location.replace("home.html");
+        } catch (error) {
+            showFormError(verifyError, error.message || "That code could not be verified. Request a new code and try again.");
+        } finally {
+            verifyButton.disabled = false;
+        }
+    });
+
+    resendButton.addEventListener("click", async () => {
+        resendButton.disabled = true;
+        showFormError(verifyError, "");
+        try {
+            const result = await postJson("/api/auth/resend-verification", {
+                email: pendingVerificationEmail
+            });
+            verifyStatus.textContent = result.message || "If the account is eligible, a new code has been sent.";
+        } catch (error) {
+            showFormError(verifyError, error.message || "We couldn’t send another code yet.");
+        } finally {
+            resendButton.disabled = false;
+        }
+    });
 }
 
 async function loadNotices() {
     const list = document.querySelector("#notice-list");
+    if (!list) return true;
     try {
         const response = await fetch("/api/student-life/notices", {
             credentials: "include",
@@ -90,139 +219,6 @@ async function loadNotices() {
     }
 }
 
-if (loginForm) {
-    const passwordInput = document.querySelector("#password");
-    const passwordToggle = document.querySelector("#password-toggle");
-
-    passwordToggle.addEventListener("click", () => {
-        const showing = passwordInput.type === "text";
-        passwordInput.type = showing ? "password" : "text";
-        passwordToggle.textContent = showing ? "Show" : "Hide";
-        passwordToggle.setAttribute("aria-label", showing ? "Show password" : "Hide password");
-        passwordToggle.setAttribute("aria-pressed", String(!showing));
-    });
-
-    loginForm.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        setLoginMessage("", false);
-
-        if (!loginForm.reportValidity()) return;
-
-        loginButton.disabled = true;
-        loginButton.classList.add("is-loading");
-        loginButton.querySelector(".submit-label").textContent = "Signing in";
-
-        try {
-            const response = await fetch(loginEndpoint, {
-                method: "POST",
-                credentials: "include",
-                headers: {
-                    "Accept": "application/json",
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    email: loginForm.elements.email.value.trim(),
-                    password: loginForm.elements.password.value
-                })
-            });
-
-            if (response.status === 401) {
-                setLoginMessage("We couldn’t sign you in with those details. Check them and try again.", true);
-                return;
-            }
-            if (response.status === 429) {
-                setLoginMessage("Too many sign-in attempts. Please wait a moment and try again.", true);
-                return;
-            }
-            if (!response.ok) {
-                setLoginMessage("Sign-in is temporarily unavailable. Please try again later.", true);
-                return;
-            }
-
-            window.location.replace("home.html");
-        } catch (error) {
-            setLoginMessage("We can’t reach the school sign-in service right now. Please try again later.", true);
-        } finally {
-            loginButton.disabled = false;
-            loginButton.classList.remove("is-loading");
-            loginButton.querySelector(".submit-label").textContent = "Sign in";
-        }
-    });
-}
-
-if (registerForm) {
-    const passwordInput = registerForm.elements.password;
-    const confirmPasswordInput = registerForm.elements.confirmPassword;
-    const successMessage = document.querySelector("#registration-success");
-
-    registerForm.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        registerError.hidden = true;
-        registerError.textContent = "";
-        registerStatus.textContent = "";
-
-        if (!registerForm.reportValidity()) return;
-        if (passwordInput.value !== confirmPasswordInput.value) {
-            registerError.textContent = "The passwords don’t match. Please check them and try again.";
-            registerError.hidden = false;
-            confirmPasswordInput.focus();
-            return;
-        }
-
-        registerButton.disabled = true;
-        registerButton.classList.add("is-loading");
-        registerButton.querySelector(".submit-label").textContent = "Creating account";
-
-        try {
-            const response = await fetch("/api/auth/register", {
-                method: "POST",
-                credentials: "include",
-                headers: {
-                    "Accept": "application/json",
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    name: registerForm.elements.name.value.trim(),
-                    email: registerForm.elements.email.value.trim(),
-                    password: passwordInput.value
-                })
-            });
-
-            if (response.status === 409) {
-                registerError.textContent = "An account with that email already exists. Sign in instead.";
-                registerError.hidden = false;
-                return;
-            }
-            if (response.status === 400) {
-                registerError.textContent = "Check your name and email, and use a password between 12 and 128 characters.";
-                registerError.hidden = false;
-                return;
-            }
-            if (response.status === 429) {
-                registerError.textContent = "Too many account requests. Please wait a moment and try again.";
-                registerError.hidden = false;
-                return;
-            }
-            if (!response.ok) {
-                registerError.textContent = "Account creation is temporarily unavailable. Please try again later.";
-                registerError.hidden = false;
-                return;
-            }
-
-            registerForm.hidden = true;
-            successMessage.hidden = false;
-        } catch (error) {
-            console.error("Could not create the student account.", error);
-            registerError.textContent = "We can’t reach the school account service right now. Please try again later.";
-            registerError.hidden = false;
-        } finally {
-            registerButton.disabled = false;
-            registerButton.classList.remove("is-loading");
-            registerButton.querySelector(".submit-label").textContent = "Create account";
-        }
-    });
-}
-
 async function checkDashboardSession() {
     if (!document.body.hasAttribute("data-protected-page")) return;
 
@@ -238,12 +234,8 @@ async function checkDashboardSession() {
             window.location.replace("login.html");
             return;
         }
-        if (response.status === 403) {
-            throw new Error("forbidden");
-        }
-        if (!response.ok) {
-            throw new Error("unavailable");
-        }
+        if (response.status === 403) throw new Error("forbidden");
+        if (!response.ok) throw new Error("unavailable");
 
         const payload = await response.json();
         if (!payload.user || typeof payload.user.displayName !== "string" || typeof payload.user.role !== "string") {
@@ -259,10 +251,14 @@ async function checkDashboardSession() {
         ) {
             throw new Error("forbidden");
         }
-        if (document.body.hasAttribute("data-community-page") && payload.user.schoolEmailVerified !== true) {
-            throw new Error("unverified-school-email");
+        if (
+            typeof payload.csrfToken !== "string" ||
+            (document.body.hasAttribute("data-community-page") && payload.user.schoolEmailVerified !== true)
+        ) {
+            throw new Error("forbidden");
         }
 
+        window.northstarCsrfToken = payload.csrfToken;
         const name = payload.user.displayName;
         document.querySelectorAll("[data-user-name]").forEach((element) => {
             element.textContent = name;
@@ -276,17 +272,14 @@ async function checkDashboardSession() {
         document.querySelectorAll("[data-user-role]").forEach((element) => {
             element.textContent = payload.user.role;
         });
-        const noticesReady = document.querySelector("#notice-list") ? await loadNotices() : true;
+        const noticesReady = await loadNotices();
         if (!noticesReady) return;
         document.body.classList.add("session-ready");
         guard.hidden = true;
+        window.dispatchEvent(new CustomEvent("northstar:session-ready", { detail: payload.user }));
     } catch (error) {
         if (error.message === "forbidden") {
             message.textContent = "Your school account doesn’t have permission to open this page. Contact your school administrator.";
-            document.querySelector("#session-link").textContent = "Return to Northstar";
-            document.querySelector("#session-link").href = "index.html";
-        } else if (error.message === "unverified-school-email") {
-            message.textContent = "Connect is available only to students with a verified NUTM school email. Contact your school administrator if you think this is a mistake.";
             document.querySelector("#session-link").textContent = "Return to Northstar";
             document.querySelector("#session-link").href = "index.html";
         } else {
@@ -304,11 +297,12 @@ if (signOutButton) {
             const response = await fetch("/api/auth/logout", {
                 method: "POST",
                 credentials: "include",
-                headers: { "Accept": "application/json" }
+                headers: {
+                    "Accept": "application/json",
+                    "X-CSRF-Token": window.northstarCsrfToken || ""
+                }
             });
-            if (!response.ok) {
-                throw new Error("Sign-out failed");
-            }
+            if (!response.ok) throw new Error("Sign-out failed");
             window.location.replace("login.html");
         } catch (error) {
             signOutButton.disabled = false;

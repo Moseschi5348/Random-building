@@ -163,6 +163,10 @@ h2 { margin: 0; color: #2b2c40; font-size: 15px; font-weight: 680; letter-spacin
 .event-info span { color: #9798a9; font-size: 8px; }
 .event-info .event-location { color: #b0b1bc; }
 .event-arrow { margin-left: auto; align-self: flex-start; color: #b3b3c1; font-size: 11px; }
+.upcoming-list { min-height: 108px; }
+.activity-register-button { margin-left: auto; padding: 6px 8px; border: 0; border-radius: 5px; background: #f0eeff; color: #6b5ed2; font-size: 8px; font-weight: 650; white-space: nowrap; cursor: pointer; }
+.activity-register-button:disabled { background: #f4f4f7; color: #88899a; cursor: default; }
+.activity-register-button[aria-busy="true"] { opacity: .6; }
 .calendar-link { display: inline-block; margin-top: 15px; color: #7063d9; font-size: 9px; font-weight: 600; }
 
 .clubs-panel { margin-top: 15px; padding: 18px 19px 19px; }
@@ -180,6 +184,7 @@ h2 { margin: 0; color: #2b2c40; font-size: 15px; font-weight: 680; letter-spacin
 .search-box input { width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: #44455a; font-size: 9px; }
 .search-box input::placeholder { color: #adaebb; }
 .club-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; }
+.club-grid > .empty-state { grid-column: 1 / -1; }
 .club-card { overflow: hidden; border: 1px solid #efeff4; border-radius: 10px; background: #fff; transition: transform .2s, box-shadow .2s; }
 .club-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px #39335a0d; }
 .club-card[hidden] { display: none; }

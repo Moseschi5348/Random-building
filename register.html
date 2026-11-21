@@ -25,7 +25,7 @@
             </div>
             <div class="login-aside-bottom">
                 <div class="login-quote-mark">N</div>
-                <p>Use your official NUTM school email. Account access is managed by the school service.</p>
+                <p>Use your official NUTM school email and verify it with a one-time code.</p>
                 <span>STUDENT ACCOUNT SUPPORT</span>
             </div>
             <div class="login-decoration login-decoration-one"></div>
@@ -43,7 +43,7 @@
                 </div>
                 <p class="login-kicker">JOIN NORTHSTAR</p>
                 <h2>Create your account</h2>
-                <p class="login-intro">Register with your NUTM school email and choose a password with at least 12 characters.</p>
+                <p class="login-intro">Register with your NUTM school email ending in @nutm.edu.ng and choose a password with at least 12 characters.</p>
 
                 <div class="login-error" id="register-error" role="alert" hidden></div>
                 <form id="register-form" novalidate>
@@ -51,7 +51,7 @@
                     <div class="input-wrap"><span class="input-icon" aria-hidden="true">◉</span><input id="register-name" name="name" type="text" autocomplete="name" maxlength="120" placeholder="Your name" required></div>
 
                     <label class="form-label register-field-label" for="register-email">School email</label>
-                    <div class="input-wrap"><span class="input-icon" aria-hidden="true">✉</span><input id="register-email" name="email" type="email" autocomplete="email" maxlength="254" placeholder="you@school.edu" required></div>
+                    <div class="input-wrap"><span class="input-icon" aria-hidden="true">✉</span><input id="register-email" name="email" type="email" autocomplete="email" maxlength="254" placeholder="eevans@nutm.edu.ng" required></div>
 
                     <label class="form-label register-field-label" for="register-password">Password</label>
                     <div class="input-wrap"><span class="input-icon" aria-hidden="true">⌑</span><input id="register-password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="At least 12 characters" required></div>
@@ -63,11 +63,20 @@
                     <p class="login-status" id="register-status" role="status" aria-live="polite"></p>
                 </form>
 
-                <div class="registration-success" id="registration-success" role="status" hidden>
-                    Your account has been created. <a href="login.html">Continue to sign in</a>.
+                <section id="verification-panel" hidden aria-labelledby="verification-heading">
+                    <h3 id="verification-heading">Verify your school email</h3>
+                    <p class="login-intro">Enter the six-digit code sent to <strong id="verification-email"></strong>.</p>
+                    <div class="login-error" id="verify-error" role="alert" hidden></div>
+                    <form id="verify-email-form" novalidate>
+                        <label class="form-label" for="verify-code">Verification code</label>
+                        <div class="input-wrap"><span class="input-icon" aria-hidden="true">#</span><input id="verify-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="Six-digit code" required></div>
+                        <button class="login-submit" id="verify-submit" type="submit"><span class="submit-label">Verify email</span><span class="submit-arrow">→</span></button>
+                        <p class="login-status" id="verify-status" role="status" aria-live="polite"></p>
+                    </form>
+                    <button class="text-link" id="resend-code" type="button">Send a new code</button>
                 </div>
                 <p class="login-help account-switch">Already have an account? <a href="login.html">Sign in</a></p>
-                <div class="login-security"><span class="security-lock">⌑</span><p><strong>Your school account sets your access</strong><span>Student records and account permissions are managed by the school service.</span></p></div>
+                <div class="login-security"><span class="security-lock">⌑</span><p><strong>Verify your school email</strong><span>A one-time code will be sent to your @nutm.edu.ng address.</span></p></div>
             </div>
             <footer class="login-footer"><span>Northstar Student Life</span><span>Student account registration</span></footer>
         </section>

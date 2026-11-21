@@ -27,6 +27,7 @@ export async function createCheckoutSession(
       : { activityRegistrationId: target.activityRegistrationId }),
   };
   const payment = await prisma.payment.create({ data: paymentData });
+  const clientBaseUrl = clientUrl.replace(/\/+$/, "");
   let session: Stripe.Checkout.Session;
   try {
     session = await stripe.checkout.sessions.create({
@@ -42,8 +43,8 @@ export async function createCheckoutSession(
         },
       ],
       metadata: { paymentId: payment.id },
-      success_url: `${clientUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${clientUrl}/payments/cancel`,
+      success_url: `${clientBaseUrl}/home.html?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${clientBaseUrl}/home.html?payment=cancel`,
     });
   } catch (error) {
     await prisma.payment.delete({ where: { id: payment.id } });

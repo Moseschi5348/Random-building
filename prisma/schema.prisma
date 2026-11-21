@@ -37,35 +37,169 @@ enum PaymentType {
   ACTIVITY
 }
 
+enum NoticeLevel {
+  EMERGENCY
+  IMPORTANT
+  GENERAL
+}
+
+enum QuizStatus {
+  DRAFT
+  LOBBY
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
 model User {
-  id           String       @id @default(cuid())
-  name         String       @db.VarChar(120)
-  email        String       @unique @db.VarChar(254)
-  passwordHash String
-  role         UserRole     @default(STUDENT)
-  points       Int          @default(0)
-  isActive     Boolean      @default(true)
-  memberships  Membership[]
+  id            String       @id @default(cuid())
+  name          String       @db.VarChar(120)
+  email         String       @unique @db.VarChar(254)
+  passwordHash  String?
+  emailVerified Boolean      @default(false)
+  role          UserRole     @default(STUDENT)
+  points        Int          @default(0)
+  isActive      Boolean      @default(true)
+  memberships   Membership[]
   registrations ActivityRegistration[]
-  attendance   Attendance[]
-  badges       UserBadge[]
-  payments     Payment[]
-  ledClubs     Club[]       @relation("ClubLeader")
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  attendance    Attendance[]
+  badges        UserBadge[]
+  payments      Payment[]
+  sessions      Session[]
+  quizParticipations QuizParticipant[]
+  hostedQuizzes Quiz[]       @relation("QuizHost")
+  ledClubs      Club[]       @relation("ClubLeader")
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique @db.VarChar(64)
+  csrfToken String   @db.VarChar(64)
+  userId    String
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model RegistrationChallenge {
+  email        String   @id @db.VarChar(254)
+  name         String   @db.VarChar(120)
+  passwordHash String
+  otpHash      String   @db.VarChar(64)
+  attempts     Int      @default(0)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([expiresAt])
+}
+
+model StudentLifeNotice {
+  id        String      @id @default(cuid())
+  title     String      @db.VarChar(160)
+  message   String      @db.VarChar(2000)
+  level     NoticeLevel @default(GENERAL)
+  startsAt  DateTime    @default(now())
+  endsAt    DateTime?
+  isActive  Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([isActive, startsAt])
+  @@index([endsAt])
+}
+
+model Quiz {
+  id                      String        @id @default(cuid())
+  title                   String        @db.VarChar(160)
+  description             String?       @db.VarChar(1000)
+  joinCode                String?       @unique @db.VarChar(6)
+  status                  QuizStatus    @default(DRAFT)
+  currentQuestionPosition Int           @default(0)
+  questionStartedAt       DateTime?
+  startedAt               DateTime?
+  finishedAt              DateTime?
+  createdById             String
+  createdBy               User          @relation("QuizHost", fields: [createdById], references: [id], onDelete: Restrict)
+  questions               QuizQuestion[]
+  participants            QuizParticipant[]
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  @@index([createdById, createdAt])
+  @@index([status, createdAt])
+}
+
+model QuizQuestion {
+  id                String       @id @default(cuid())
+  quizId            String
+  position          Int
+  prompt            String       @db.VarChar(1000)
+  timeLimitSeconds  Int          @default(30)
+  quiz              Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options           QuizOption[]
+  answers           QuizAnswer[]
+  createdAt         DateTime     @default(now())
+
+  @@unique([quizId, position])
+}
+
+model QuizOption {
+  id         String       @id @default(cuid())
+  questionId String
+  text       String       @db.VarChar(300)
+  isCorrect  Boolean      @default(false)
+  question   QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers    QuizAnswer[]
+}
+
+model QuizParticipant {
+  id         String       @id @default(cuid())
+  quizId     String
+  userId     String
+  score      Int          @default(0)
+  joinedAt   DateTime     @default(now())
+  finishedAt DateTime?
+  quiz       Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers    QuizAnswer[]
+
+  @@unique([quizId, userId])
+  @@index([quizId, score])
+}
+
+model QuizAnswer {
+  id              String         @id @default(cuid())
+  participantId   String
+  questionId      String
+  optionId        String
+  isCorrect       Boolean
+  pointsAwarded   Int            @default(0)
+  answeredAt      DateTime       @default(now())
+  participant     QuizParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  question        QuizQuestion   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  option          QuizOption     @relation(fields: [optionId], references: [id], onDelete: Restrict)
+
+  @@unique([participantId, questionId])
+  @@index([questionId])
 }
 
 model Club {
-  id              String       @id @default(cuid())
-  name            String       @db.VarChar(120)
-  description     String       @db.VarChar(2000)
-  membershipFeeCents Int       @default(0)
-  leaderId        String
-  leader          User         @relation("ClubLeader", fields: [leaderId], references: [id], onDelete: Restrict)
-  memberships     Membership[]
-  activities      Activity[]
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id                 String       @id @default(cuid())
+  name               String       @db.VarChar(120)
+  description        String       @db.VarChar(2000)
+  membershipFeeCents Int          @default(0)
+  leaderId           String
+  leader             User         @relation("ClubLeader", fields: [leaderId], references: [id], onDelete: Restrict)
+  memberships        Membership[]
+  activities         Activity[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 }
 
 model Membership {
@@ -83,17 +217,17 @@ model Membership {
 }
 
 model Activity {
-  id              String                  @id @default(cuid())
-  clubId          String
-  title           String                  @db.VarChar(160)
-  description     String                  @db.VarChar(2000)
-  startsAt        DateTime
-  registrationFeeCents Int                 @default(0)
-  club            Club                    @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  registrations   ActivityRegistration[]
-  attendance      Attendance[]
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
+  id                   String                  @id @default(cuid())
+  clubId               String
+  title                String                  @db.VarChar(160)
+  description          String                  @db.VarChar(2000)
+  startsAt             DateTime
+  registrationFeeCents Int                     @default(0)
+  club                 Club                    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  registrations        ActivityRegistration[]
+  attendance           Attendance[]
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
 }
 
 model ActivityRegistration {
@@ -111,15 +245,15 @@ model ActivityRegistration {
 }
 
 model Attendance {
-  id          String   @id @default(cuid())
-  userId      String
-  activityId  String
-  punctual    Boolean  @default(false)
-  goodConduct Boolean  @default(false)
+  id            String   @id @default(cuid())
+  userId        String
+  activityId    String
+  punctual      Boolean  @default(false)
+  goodConduct   Boolean  @default(false)
   pointsAwarded Int
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activity    Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activity      Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
 
   @@unique([userId, activityId])
 }
