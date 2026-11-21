@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import express from "express";
 import Stripe from "stripe";
 import { createApp } from "./app-factory";
 import { getConfig } from "./config";
@@ -6,7 +7,7 @@ import { getConfig } from "./config";
 const config = getConfig();
 const prisma = new PrismaClient();
 const stripe = new Stripe(config.stripeSecretKey);
-const app = createApp(prisma, stripe, config);
+const app = createApp(prisma, stripe, config, express());
 
 const server = app.listen(config.port, () => {
   console.log(`DIS API listening on port ${config.port}`);
