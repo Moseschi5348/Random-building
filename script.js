@@ -1,8 +1,8 @@
 const clubDetails = {
-    robotics: { name: "Robotics Club", icon: "🤖", iconClass: "mini-robot", next: "Next meetup · Wed, Mar 18" },
-    art: { name: "Art & Design Studio", icon: "🎨", iconClass: "mini-art", next: "Next meetup · Fri, Mar 20" },
-    green: { name: "Green Team", icon: "🌱", iconClass: "mini-green", next: "Next meetup · Tue, Mar 17" },
-    coding: { name: "Coding Collective", icon: "💻", iconClass: "mini-coding", next: "Next meetup · Mon, Mar 16" }
+    robotics: { name: "Robotics Club", icon: "🤖", iconClass: "mini-robot", next: "Next meetup · Wed, Mar 17" },
+    art: { name: "Art & Design Studio", icon: "🎨", iconClass: "mini-art", next: "Next meetup · Fri, Mar 19" },
+    green: { name: "Green Team", icon: "🌱", iconClass: "mini-green", next: "Next meetup · Tue, Mar 16" },
+    coding: { name: "Coding Collective", icon: "💻", iconClass: "mini-coding", next: "Next meetup · Mon, Mar 15" }
 };
 
 const defaultState = {

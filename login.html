@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f7f6eb">
+    <meta name="description" content="Sign in to your Northstar Student Life school account.">
+    <title>Sign in | Northstar Student Life</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="pages.css">
+    <script src="auth.js" defer></script>
+    <script src="theme.js" defer></script>
+</head>
+<body class="login-page">
+    <main class="login-layout">
+        <section class="login-aside">
+            <a class="brand login-brand" href="index.html" aria-label="Northstar Student Life home">
+                <span class="brand-mark">N</span>
+                <span class="brand-copy">northstar<span>STUDENT LIFE</span></span>
+            </a>
+            <div class="login-aside-copy">
+                <p class="landing-eyebrow"><span class="live-dot"></span> NORTHSTAR STUDENT LIFE</p>
+                <h1>Your activities,<br>all in one<br><span>place.</span></h1>
+                <p>Sign in with your school account to check your clubs, attendance, and upcoming activities.</p>
+            </div>
+            <div class="login-aside-bottom">
+                <div class="login-quote-mark">N</div>
+                <p>Need help with your account? Your school office can help you get signed in.</p>
+                <span>STUDENT ACCOUNT SUPPORT</span>
+            </div>
+            <div class="login-decoration login-decoration-one"></div>
+            <div class="login-decoration login-decoration-two">✦</div>
+        </section>
+
+        <section class="login-main">
+            <div class="login-top-actions">
+                <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme" aria-pressed="false"><span class="theme-icon">☾</span><span class="theme-label">Dark</span></button>
+                <a class="back-home" href="index.html"><span>←</span> Back to home</a>
+            </div>
+            <div class="login-card">
+                <div class="login-mobile-brand">
+                    <a class="brand" href="index.html"><span class="brand-mark">N</span><span class="brand-copy">northstar<span>STUDENT LIFE</span></span></a>
+                </div>
+                <p class="login-kicker">WELCOME BACK</p>
+                <h2>Sign in to Northstar</h2>
+                <p class="login-intro">Use the school account provided to you.</p>
+
+                <div class="login-error" id="login-error" role="alert" hidden></div>
+                <form id="login-form" novalidate>
+                    <label class="form-label" for="email">School email</label>
+                    <div class="input-wrap"><span class="input-icon">✉</span><input id="email" name="email" type="email" autocomplete="username" placeholder="you@school.edu" required></div>
+                    <div class="password-label"><label class="form-label" for="password">Password</label><a href="#support">Need help signing in?</a></div>
+                    <div class="input-wrap"><span class="input-icon">⌑</span><input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required><button class="password-toggle" id="password-toggle" type="button" aria-label="Show password" aria-pressed="false">Show</button></div>
+                    <button class="login-submit" id="login-submit" type="submit"><span class="submit-label">Sign in</span><span class="submit-arrow">→</span></button>
+                    <p class="login-status" id="login-status" role="status" aria-live="polite"></p>
+                </form>
+
+                <div class="login-security"><span class="security-lock">⌑</span><p><strong>Your school account sets your access</strong><span>The school server must verify your account and protect student records.</span></p></div>
+                <p class="login-help" id="support">Can’t access your school account? Contact your school administrator.</p>
+            </div>
+            <footer class="login-footer"><span>Northstar Student Life</span><span>School account sign-in</span></footer>
+        </section>
+    </main>
+</body>
+</html>
