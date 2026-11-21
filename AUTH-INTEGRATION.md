@@ -1,48 +1,25 @@
-# School email and OTP authentication
+# Google sign-in
 
-The backend accepts only NUTM addresses ending in `@nutm.edu.ng`. It sends a one-time verification code to the address before creating the student account. Verification codes expire after ten minutes, are limited to five attempts, and are stored only as keyed hashes.
+DIS uses Google OAuth sign-in. Any Google account can sign in; there is no NUTM domain restriction, password form, or email OTP. Google verifies the account email before DIS creates or links a user record.
 
-## Registration flow
+## Google Cloud setup
 
-1. The frontend submits the student's name, NUTM email, and password to `POST /api/auth/register`.
-2. The backend validates the exact school email domain, stores a pending registration, and sends a six-digit code through Gmail SMTP.
-3. The student submits the code to `POST /api/auth/verify-email`.
-4. On successful verification, the backend creates the student account, marks the school email as verified, and sets an HTTP-only session cookie.
+1. In Google Cloud Console, configure the OAuth consent screen for an external app. Request only the `openid`, `email`, and `profile` scopes. Add test users while the app is in testing; publish it when ready for general use.
+2. Create an OAuth client ID for a **Web application**.
+3. Add the exact callback URL to the OAuth client’s authorized redirect URIs:
+   - Local: `http://localhost:3000/api/auth/google/callback`
+   - Production: `https://YOUR-VERCEL-DOMAIN/api/auth/google/callback`
+4. Configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_CALLBACK_URL` in the server environment. Set `GOOGLE_CALLBACK_URL` to the exact production callback URL. Keep the client secret only in Vercel’s encrypted environment variables.
 
-`POST /api/auth/resend-verification` requests a new code. A per-address cooldown applies. The frontend does not store a password or session token in local storage.
+The OAuth state and nonce are random, short-lived, HTTP-only cookies. The backend verifies Google’s ID-token signature, audience, nonce, and verified email before creating a session. New users receive the `STUDENT` role. If an existing DIS account has the same verified email, Google sign-in links it while preserving its role; an account already linked to a different Google identity is rejected.
 
-## Login and session
+## Admin account
 
-### `POST /api/auth/login`
+Set `ADMIN_EMAIL` to the Google account that should administer DIS and run `npm run db:seed` once after applying database migrations. That Google account receives the `ADMIN` role on its first sign-in.
 
-Request:
+## Session behavior
 
-```json
-{
-  "email": "eevans@nutm.edu.ng",
-  "password": "..."
-}
-```
-
-Login is allowed only for an active account with a verified school email. Invalid credentials return a generic `401`.
-
-### `GET /api/auth/session`
-
-Returns the current account and a session-bound CSRF token. Send the token in `X-CSRF-Token` for state-changing requests.
-
-### `POST /api/auth/logout`
-
-Requires the session-bound CSRF token, invalidates the server-side session, and expires the session cookie.
-
-## Gmail sender setup
-
-Use a dedicated Gmail account for DIS email. Enable 2-Step Verification, create an App Password in Google Account security settings, and configure `GMAIL_USER` and `GMAIL_APP_PASSWORD` in the server environment. Do not use the account's normal password. Some Google Workspace administrators disable App Passwords. Set `OTP_HASH_SECRET` to a separate random value of at least 32 characters. Never put these secrets in frontend code or commit them to GitHub. Gmail sending limits make this suitable for a low-volume pilot; use a transactional email service if volume grows.
-
-## Security responsibilities
-
-- The backend enforces the `@nutm.edu.ng` domain; the frontend's email check is only a usability aid.
-- OTPs are cryptographically random, expire after ten minutes, have a five-attempt limit, and are HMAC-hashed with a server-only secret.
-- Registration and verification requests are rate-limited; sending another code is also throttled per email address.
-- Session cookies are HTTP-only, `SameSite=Lax`, and `Secure` in production. Only a hash of the random session token is stored in PostgreSQL.
-- Enforce authentication and role/record-level authorization on every protected API request. Frontend visibility checks are not an authorization boundary.
-- Use HTTPS in production and keep database URLs, OTP secrets, Gmail App Passwords, Stripe keys, and webhook secrets in a deployment secret manager.
+- The backend issues an HTTP-only session cookie after a successful Google callback.
+- State-changing API calls require the session-bound CSRF token returned by `GET /api/auth/session`.
+- Sessions expire after eight hours; only hashes of session tokens are stored in PostgreSQL.
+- Google OAuth credentials and database credentials must remain server-side. The Google client ID is public; the client secret is not.

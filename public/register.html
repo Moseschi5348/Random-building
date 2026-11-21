@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#f7f6eb">
-    <meta name="description" content="Create your Northstar Student Life account.">
+    <meta name="description" content="Create your Northstar Student Life account with Google.">
     <title>Create account | Northstar Student Life</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="pages.css">
@@ -21,11 +21,11 @@
             <div class="login-aside-copy">
                 <p class="landing-eyebrow"><span class="live-dot"></span> NORTHSTAR STUDENT LIFE</p>
                 <h1>Find your<br>people.<br><span>Find your place.</span></h1>
-                <p>Create a school account to keep your clubs, attendance, and activities together.</p>
+                <p>Create an account with Google to keep your clubs, attendance, and activities together.</p>
             </div>
             <div class="login-aside-bottom">
                 <div class="login-quote-mark">N</div>
-                <p>Use your official NUTM school email and verify it with a one-time code.</p>
+                <p>Use any Google account to get started with Northstar Student Life.</p>
                 <span>STUDENT ACCOUNT SUPPORT</span>
             </div>
             <div class="login-decoration login-decoration-one"></div>
@@ -43,42 +43,19 @@
                 </div>
                 <p class="login-kicker">JOIN NORTHSTAR</p>
                 <h2>Create your account</h2>
-                <p class="login-intro">Register with your NUTM school email ending in @nutm.edu.ng and choose a password with at least 12 characters.</p>
+                <p class="login-intro">No separate password or email code is needed. Continue with any Google account.</p>
 
-                <div class="login-error" id="register-error" role="alert" hidden></div>
-                <form id="register-form" novalidate>
-                    <label class="form-label" for="register-name">Full name</label>
-                    <div class="input-wrap"><span class="input-icon" aria-hidden="true">◉</span><input id="register-name" name="name" type="text" autocomplete="name" maxlength="120" placeholder="Your name" required></div>
+                <div class="login-error" id="login-error" role="alert" hidden></div>
+                <a class="login-submit" id="google-sign-in" href="/api/auth/google">
+                    <span class="submit-label">Continue with Google</span>
+                    <span class="submit-arrow" aria-hidden="true">→</span>
+                </a>
+                <p class="login-status" role="status">Google will securely verify your account.</p>
 
-                    <label class="form-label register-field-label" for="register-email">School email</label>
-                    <div class="input-wrap"><span class="input-icon" aria-hidden="true">✉</span><input id="register-email" name="email" type="email" autocomplete="email" maxlength="254" placeholder="eevans@nutm.edu.ng" required></div>
-
-                    <label class="form-label register-field-label" for="register-password">Password</label>
-                    <div class="input-wrap"><span class="input-icon" aria-hidden="true">⌑</span><input id="register-password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="At least 12 characters" required></div>
-
-                    <label class="form-label register-field-label" for="register-confirm-password">Confirm password</label>
-                    <div class="input-wrap"><span class="input-icon" aria-hidden="true">⌑</span><input id="register-confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="Enter your password again" required></div>
-
-                    <button class="login-submit" id="register-submit" type="submit"><span class="submit-label">Create account</span><span class="submit-arrow">→</span></button>
-                    <p class="login-status" id="register-status" role="status" aria-live="polite"></p>
-                </form>
-
-                <section id="verification-panel" hidden aria-labelledby="verification-heading">
-                    <h3 id="verification-heading">Verify your school email</h3>
-                    <p class="login-intro">Enter the six-digit code sent to <strong id="verification-email"></strong>.</p>
-                    <div class="login-error" id="verify-error" role="alert" hidden></div>
-                    <form id="verify-email-form" novalidate>
-                        <label class="form-label" for="verify-code">Verification code</label>
-                        <div class="input-wrap"><span class="input-icon" aria-hidden="true">#</span><input id="verify-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="Six-digit code" required></div>
-                        <button class="login-submit" id="verify-submit" type="submit"><span class="submit-label">Verify email</span><span class="submit-arrow">→</span></button>
-                        <p class="login-status" id="verify-status" role="status" aria-live="polite"></p>
-                    </form>
-                    <button class="text-link" id="resend-code" type="button">Send a new code</button>
-                </div>
-                <p class="login-help account-switch">Already have an account? <a href="login.html">Sign in</a></p>
-                <div class="login-security"><span class="security-lock">⌑</span><p><strong>Verify your school email</strong><span>A one-time code will be sent to your @nutm.edu.ng address.</span></p></div>
+                <p class="login-help account-switch">Already started? <a href="login.html">Sign in</a></p>
+                <div class="login-security"><span class="security-lock">⌑</span><p><strong>Your Google account verifies sign-in</strong><span>DIS creates a student account the first time you sign in.</span></p></div>
             </div>
-            <footer class="login-footer"><span>Northstar Student Life</span><span>Student account registration</span></footer>
+            <footer class="login-footer"><span>Northstar Student Life</span><span>Google account registration</span></footer>
         </section>
     </main>
 </body>

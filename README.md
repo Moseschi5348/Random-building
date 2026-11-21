@@ -1,6 +1,6 @@
 # DIS backend
 
-Backend API for clubs, activity registration, Stripe payments, attendance, points, badges, and school-email accounts.
+Backend API for clubs, activity registration, Stripe payments, attendance, points, badges, and Google sign-in.
 
 GitHub stores this project's source code and migrations. Student and activity records are stored in the managed PostgreSQL database configured by `DATABASE_URL`.
 
@@ -8,28 +8,28 @@ GitHub stores this project's source code and migrations. Student and activity re
 
 - Node.js 20+
 - Managed PostgreSQL
-- A dedicated Gmail account with 2-Step Verification and an App Password for low-volume OTP email
+- A Google Cloud OAuth web client
 - A Stripe account (test mode is sufficient for local development)
 
 ## Setup
 
 1. Install packages with `npm install`.
-2. Create a dedicated Gmail sender account, enable 2-Step Verification, and create an App Password in its Google Account security settings. Use the App Password, not the account's normal password. Google Workspace administrators can disable App Passwords.
-3. Copy `.env.example` to `.env`. Set the managed database URL, a random `OTP_HASH_SECRET` of at least 32 characters, `GMAIL_USER`, `GMAIL_APP_PASSWORD`, and Stripe test keys. Keep secrets server-side; never commit `.env` or put credentials in frontend code.
+2. Create a Google OAuth client for a web application. Add `http://localhost:3000/api/auth/google/callback` as an authorized redirect URI for local development.
+3. Copy `.env.example` to `.env`. Set the database URLs, Google OAuth client ID/secret/callback URL, and Stripe test keys. Keep secrets server-side; never commit `.env` or put credentials in frontend code. See [AUTH-INTEGRATION.md](./AUTH-INTEGRATION.md) for Google Cloud setup.
 4. Run `npx prisma migrate deploy` to apply the database migrations.
-5. Set `ADMIN_EMAIL` to the administrator's NUTM email and run `npm run db:seed`. The administrator then registers with that address and verifies it by OTP; the seeded administrator role is retained.
+5. To seed an administrator, set `ADMIN_EMAIL` to that administrator's Google account email and run `npm run db:seed`. The account receives the administrator role when it signs in with Google.
 6. Run `npm run dev` and open `http://localhost:3000`. The Express server serves the frontend and API from the same origin.
 
-The backend accepts only addresses ending in `@nutm.edu.ng`. Registration sends a six-digit code through Gmail SMTP. Codes expire after ten minutes, allow at most five attempts, and are stored only as keyed hashes. Accounts are created and signed in only after email verification. Sign-in afterward uses the verified school email and password. Gmail is suitable for a low-volume pilot; use a transactional email service for higher-volume production sending.
+Any Google account with a verified email can sign in; DIS does not restrict email domains or independently verify school enrollment. New accounts receive the `STUDENT` role. Existing user and activity records are preserved by the Google sign-in migration; password sign-in is no longer available.
 
-For production, use HTTPS, production Stripe keys, the Gmail App Password stored in the host's secret manager, and a production managed PostgreSQL URL.
+For production, use HTTPS, production Stripe keys, Google OAuth credentials stored in the host's secret manager, and a production managed PostgreSQL URL.
 
 ## Deploy to Vercel with Supabase Postgres
 
 The Express app is recognized by Vercel through `src/server.ts`; Vercel runs it as a Function. Static pages, scripts, styles, and fonts live under `public/` so Vercel can serve them from its CDN.
 
 1. Import this GitHub repository into Vercel. Use the repository root as the project root and Node.js 20 or newer.
-2. In Vercel project settings, add the app's environment variables: `DATABASE_URL`, `DIRECT_URL`, `OTP_HASH_SECRET`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `CLIENT_URL`, `CORS_ORIGIN`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `ADMIN_EMAIL`. Keep all passwords and keys in Vercel's encrypted environment-variable settings.
+2. In Vercel project settings, add the app's environment variables: `DATABASE_URL`, `DIRECT_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `CLIENT_URL`, `CORS_ORIGIN`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `ADMIN_EMAIL`. Keep secrets in Vercel's encrypted environment-variable settings. The callback URL must exactly match the Google OAuth client's authorized redirect URI.
 3. In Supabase's **Connect** dialog, copy the **Transaction pooler** URL for `DATABASE_URL` (port `6543`) and add `pgbouncer=true&connection_limit=1`. Copy the **Session pooler** URL for `DIRECT_URL` (port `5432`). Use the exact host and username Supabase provides; do not share the database password.
 4. Set `CLIENT_URL` and `CORS_ORIGIN` to the deployed HTTPS origin. Vercel supplies the runtime port.
 5. Apply schema migrations once with `npx prisma migrate deploy` using `DIRECT_URL`, then run `npm run db:seed` once with `ADMIN_EMAIL` set. Do not run development migrations against production.
@@ -51,10 +51,8 @@ All API paths are under `/api`.
 
 | Method | Path | Access |
 | --- | --- | --- |
-| POST | `/auth/register` | Public; NUTM email only, sends OTP |
-| POST | `/auth/verify-email` | Public; verifies OTP and creates account |
-| POST | `/auth/resend-verification` | Public; throttled |
-| POST | `/auth/login` | Public; verified account required |
+| GET | `/auth/google` | Public; starts Google OAuth |
+| GET | `/auth/google/callback` | Public; verifies Google identity and creates session |
 | GET | `/auth/session` | Signed-in user |
 | POST | `/auth/logout` | Signed-in user; CSRF protected |
 | GET | `/me` | Signed-in user |
@@ -79,9 +77,8 @@ Attendance awards 10 participation points, plus 5 for punctuality and 3 for good
 
 ## Security baseline
 
-- Registration and sign-in enforce the `@nutm.edu.ng` domain server-side.
-- Passwords use bcrypt; OTPs use cryptographic randomness, HMAC storage, expiry, attempt limits, and rate limits.
-- Gmail SMTP credentials are used only on the backend to send mail.
+- Google sign-in validates the OAuth state, nonce, token audience/signature, and verified email.
+- Password and OTP sign-in endpoints have been removed; Google OAuth credentials are used only on the backend.
 - Browser sessions expire after eight hours; only hashes of session tokens are stored in PostgreSQL.
 - Helmet, exact-origin CORS, request-size limits, CSRF protections, and role/record-level authorization protect API requests.
 - Stripe Checkout is hosted by Stripe. Webhook signatures and payment amount/currency are validated before activating registrations.

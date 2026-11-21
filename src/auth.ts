@@ -62,7 +62,7 @@ export function clearSessionCookie(res: Response, secure: boolean): void {
   );
 }
 
-function readCookie(req: Request, name: string): string | undefined {
+export function readCookie(req: Request, name: string): string | undefined {
   const entry = req.headers.cookie
     ?.split(";")
     .map((part) => part.trim())

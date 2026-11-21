@@ -39,10 +39,7 @@ export function createApp(prisma: PrismaClient, stripe: Stripe, config: AppConfi
     standardHeaders: "draft-8",
     legacyHeaders: false,
   });
-  app.use("/api/auth/login", authRateLimit);
-  app.use("/api/auth/register", authRateLimit);
-  app.use("/api/auth/verify-email", authRateLimit);
-  app.use("/api/auth/resend-verification", authRateLimit);
+  app.use("/api/auth/google", authRateLimit);
 
   const frontendFiles: Record<string, string> = {
     "/": "index.html",

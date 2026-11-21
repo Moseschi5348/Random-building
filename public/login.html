@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#f7f6eb">
-    <meta name="description" content="Sign in to your Northstar Student Life school account.">
+    <meta name="description" content="Sign in to your Northstar Student Life account with Google.">
     <title>Sign in | Northstar Student Life</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="pages.css">
@@ -21,11 +21,11 @@
             <div class="login-aside-copy">
                 <p class="landing-eyebrow"><span class="live-dot"></span> NORTHSTAR STUDENT LIFE</p>
                 <h1>Your activities,<br>all in one<br><span>place.</span></h1>
-                <p>Sign in with your school account to check your clubs, attendance, and upcoming activities.</p>
+                <p>Sign in with Google to check your clubs, attendance, and upcoming activities.</p>
             </div>
             <div class="login-aside-bottom">
                 <div class="login-quote-mark">N</div>
-                <p>Need help with your account? Your school office can help you get signed in.</p>
+                <p>Need help with your account? Contact the DIS administrator.</p>
                 <span>STUDENT ACCOUNT SUPPORT</span>
             </div>
             <div class="login-decoration login-decoration-one"></div>
@@ -43,23 +43,20 @@
                 </div>
                 <p class="login-kicker">WELCOME BACK</p>
                 <h2>Sign in to Northstar</h2>
-                <p class="login-intro">Sign in with your email and password.</p>
+                <p class="login-intro">Continue securely with any Google account.</p>
 
                 <div class="login-error" id="login-error" role="alert" hidden></div>
-                <form id="login-form" novalidate>
-                    <label class="form-label" for="email">NUTM school email</label>
-                    <div class="input-wrap"><span class="input-icon" aria-hidden="true">✉</span><input id="email" name="email" type="email" autocomplete="username" placeholder="eevans@nutm.edu.ng" required></div>
-                    <label class="form-label" for="password">Password</label>
-                    <div class="input-wrap"><span class="input-icon" aria-hidden="true">⌑</span><input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required></div>
-                    <button class="login-submit" id="login-submit" type="submit"><span class="submit-label">Sign in</span><span class="submit-arrow">→</span></button>
-                    <p class="login-status" id="login-status" role="status" aria-live="polite"></p>
-                </form>
+                <a class="login-submit" id="google-sign-in" href="/api/auth/google">
+                    <span class="submit-label">Continue with Google</span>
+                    <span class="submit-arrow" aria-hidden="true">→</span>
+                </a>
+                <p class="login-status" role="status">You’ll choose your Google account on the next screen.</p>
 
                 <p class="login-help account-switch">New to Northstar? <a href="register.html">Create an account</a></p>
-                <div class="login-security"><span class="security-lock">⌑</span><p><strong>Your school account sets your access</strong><span>The school server must verify your account and protect student records.</span></p></div>
-                <p class="login-help" id="support">Can’t access your school account? Contact your school administrator.</p>
+                <div class="login-security"><span class="security-lock">⌑</span><p><strong>Your Google account verifies sign-in</strong><span>DIS creates a student account the first time you sign in.</span></p></div>
+                <p class="login-help" id="support">Need help? Contact the DIS administrator.</p>
             </div>
-            <footer class="login-footer"><span>Northstar Student Life</span><span>School account sign-in</span></footer>
+            <footer class="login-footer"><span>Northstar Student Life</span><span>Google account sign-in</span></footer>
         </section>
     </main>
 </body>

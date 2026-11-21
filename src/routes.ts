@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
-import bcrypt from "bcryptjs";
+import { randomBytes, timingSafeEqual } from "node:crypto";
+import { OAuth2Client } from "google-auth-library";
 import {
   MembershipStatus,
   NoticeLevel,
@@ -12,50 +13,16 @@ import {
   clearSessionCookie,
   createSessionCredentials,
   permissionsForRole,
+  readCookie,
   requireAuth,
   requirePermission,
   requireRole,
   setSessionCookie,
 } from "./auth";
 import type { AppConfig } from "./config";
-import { GmailOtpMailer } from "./email";
 import { HttpError, parseBody } from "./http";
-import {
-  createOtp,
-  hashOtp,
-  isSchoolEmail,
-  OTP_MAX_ATTEMPTS,
-  OTP_RESEND_COOLDOWN_MS,
-  OTP_TTL_MS,
-  verifyOtp,
-} from "./otp";
 import { applyStripeEvent, createCheckoutSession } from "./payments";
 import { z } from "zod";
-
-const schoolEmailSchema = z.string()
-  .trim()
-  .email()
-  .max(254)
-  .transform((value) => value.toLowerCase())
-  .refine(isSchoolEmail, "Use your NUTM school email ending in @nutm.edu.ng.");
-
-const registerSchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  email: schoolEmailSchema,
-  password: z.string().min(12).max(128),
-});
-
-const loginSchema = z.object({
-  email: schoolEmailSchema,
-  password: z.string().min(1).max(128),
-});
-
-const verifyEmailSchema = z.object({
-  email: schoolEmailSchema,
-  code: z.string().regex(/^\d{6}$/, "Enter the six-digit verification code."),
-});
-
-const resendVerificationSchema = z.object({ email: schoolEmailSchema });
 
 const clubSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -84,7 +51,37 @@ const noticeSchema = z.object({
   endsAt: z.string().datetime().transform((value) => new Date(value)).optional(),
 });
 
-const dummyPasswordHash = bcrypt.hashSync("unreachable-dummy-password", 12);
+const GOOGLE_STATE_COOKIE = "dis_google_state";
+const GOOGLE_NONCE_COOKIE = "dis_google_nonce";
+const GOOGLE_AUTH_COOKIE_TTL_SECONDS = 600;
+
+function safeEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function setGoogleAuthCookie(res: Response, name: string, value: string, secure: boolean): void {
+  res.append(
+    "Set-Cookie",
+    `${name}=${value}; Path=/api/auth/google; HttpOnly; SameSite=Lax; Max-Age=${GOOGLE_AUTH_COOKIE_TTL_SECONDS}${secure ? "; Secure" : ""}`,
+  );
+}
+
+function clearGoogleAuthCookies(res: Response, secure: boolean): void {
+  for (const name of [GOOGLE_STATE_COOKIE, GOOGLE_NONCE_COOKIE]) {
+    res.append(
+      "Set-Cookie",
+      `${name}=; Path=/api/auth/google; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${secure ? "; Secure" : ""}`,
+    );
+  }
+}
+
+function loginPageUrl(clientUrl: string, error: string): string {
+  const url = new URL("/login.html", clientUrl);
+  url.searchParams.set("error", error);
+  return url.toString();
+}
 
 function currentUserId(req: Request): string {
   if (!req.user) {
@@ -120,65 +117,6 @@ async function createLoginSession(
   setSessionCookie(res, credentials.token, secureCookie);
 }
 
-async function sendRegistrationCode(
-  prisma: PrismaClient,
-  mailer: GmailOtpMailer | null,
-  email: string,
-  name: string,
-  passwordHash: string,
-  otpHashSecret: string,
-): Promise<void> {
-  if (!mailer) {
-    throw new HttpError(503, "Verification email delivery has not been configured.");
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { emailVerified: true },
-  });
-  if (user?.emailVerified) {
-    throw new HttpError(409, "An account with this school email already exists. Sign in instead.");
-  }
-
-  const previous = await prisma.registrationChallenge.findUnique({ where: { email } });
-  if (
-    previous &&
-    Date.now() - previous.createdAt.getTime() < OTP_RESEND_COOLDOWN_MS
-  ) {
-    throw new HttpError(429, "Wait a minute before requesting another verification code.");
-  }
-
-  const code = createOtp();
-  const otpHash = hashOtp(email, code, otpHashSecret);
-  const now = new Date();
-  await prisma.registrationChallenge.upsert({
-    where: { email },
-    update: {
-      name,
-      passwordHash,
-      otpHash,
-      attempts: 0,
-      expiresAt: new Date(now.getTime() + OTP_TTL_MS),
-      createdAt: now,
-    },
-    create: {
-      email,
-      name,
-      passwordHash,
-      otpHash,
-      expiresAt: new Date(now.getTime() + OTP_TTL_MS),
-      createdAt: now,
-    },
-  });
-
-  try {
-    await mailer.sendVerificationCode(email, code);
-  } catch (error) {
-    console.error("Gmail could not send a registration verification code.", error);
-    throw new HttpError(502, "We couldn't send a verification code. Please try again later.");
-  }
-}
-
 async function assertClubManager(
   prisma: PrismaClient,
   clubId: string,
@@ -207,149 +145,179 @@ export function createApiRouter(
 ): Router {
   const router = Router();
   const auth = requireAuth(prisma);
-  const otpMailer = config.gmail ? new GmailOtpMailer(config.gmail) : null;
+  const googleOAuth = config.google
+    ? new OAuth2Client(
+        config.google.clientId,
+        config.google.clientSecret,
+        config.google.callbackUrl,
+      )
+    : null;
 
-  router.post("/auth/register", async (req, res) => {
-    const body = parseBody(registerSchema, req.body);
-    if (!otpMailer) {
-      throw new HttpError(503, "Verification email delivery has not been configured.");
+  router.get("/auth/google", (_req, res) => {
+    if (!googleOAuth) {
+      throw new HttpError(503, "Google sign-in has not been configured.");
     }
-    const passwordHash = await bcrypt.hash(body.password, 12);
-    await sendRegistrationCode(
-      prisma,
-      otpMailer,
-      body.email,
-      body.name,
-      passwordHash,
-      config.otpHashSecret,
-    );
-    res.status(202).json({ message: "A verification code was sent to your school email." });
+
+    const state = randomBytes(32).toString("base64url");
+    const nonce = randomBytes(32).toString("base64url");
+    const secure = config.nodeEnv === "production";
+    setGoogleAuthCookie(res, GOOGLE_STATE_COOKIE, state, secure);
+    setGoogleAuthCookie(res, GOOGLE_NONCE_COOKIE, nonce, secure);
+    res.redirect(302, googleOAuth.generateAuthUrl({
+      access_type: "online",
+      prompt: "select_account",
+      scope: ["openid", "email", "profile"],
+      state,
+      nonce,
+    }));
   });
 
-  router.post("/auth/resend-verification", async (req, res) => {
-    const body = parseBody(resendVerificationSchema, req.body);
-    const challenge = await prisma.registrationChallenge.findUnique({
-      where: { email: body.email },
-    });
-    if (!challenge) {
-      res.status(202).json({ message: "If the account is eligible, a new code has been sent." });
+  router.get("/auth/google/callback", async (req, res) => {
+    const secure = config.nodeEnv === "production";
+    const storedState = readCookie(req, GOOGLE_STATE_COOKIE);
+    const storedNonce = readCookie(req, GOOGLE_NONCE_COOKIE);
+    const state = typeof req.query.state === "string" ? req.query.state : "";
+    clearGoogleAuthCookies(res, secure);
+
+    if (!googleOAuth || !config.google) {
+      throw new HttpError(503, "Google sign-in has not been configured.");
+    }
+    if (!storedState || !storedNonce || !safeEqual(state, storedState)) {
+      res.redirect(302, loginPageUrl(config.clientUrl, "google"));
+      return;
+    }
+    if (typeof req.query.error === "string" || typeof req.query.code !== "string") {
+      res.redirect(302, loginPageUrl(config.clientUrl, "google"));
       return;
     }
 
-    await sendRegistrationCode(
-      prisma,
-      otpMailer,
-      challenge.email,
-      challenge.name,
-      challenge.passwordHash,
-      config.otpHashSecret,
-    );
-    res.status(202).json({ message: "If the account is eligible, a new code has been sent." });
-  });
+    let idToken: string | undefined;
+    try {
+      const { tokens } = await googleOAuth.getToken(req.query.code);
+      idToken = tokens.id_token ?? undefined;
+    } catch (error) {
+      console.error("Google authorization code exchange failed.", error);
+      res.redirect(302, loginPageUrl(config.clientUrl, "google"));
+      return;
+    }
+    if (!idToken) {
+      res.redirect(302, loginPageUrl(config.clientUrl, "google"));
+      return;
+    }
 
-  router.post("/auth/verify-email", async (req, res) => {
-    const body = parseBody(verifyEmailSchema, req.body);
-    const outcome = await prisma.$transaction(async (tx) => {
-      const challenge = await tx.registrationChallenge.findUnique({
-        where: { email: body.email },
+    let payload:
+      | {
+          sub: string;
+          email?: string;
+          email_verified?: boolean;
+          nonce?: string;
+          name?: string;
+        }
+      | undefined;
+    try {
+      const ticket = await googleOAuth.verifyIdToken({
+        idToken,
+        audience: config.google.clientId,
       });
-      if (!challenge) return { kind: "invalid" as const };
+      payload = ticket.getPayload();
+    } catch (error) {
+      console.error("Google identity token verification failed.", error);
+      res.redirect(302, loginPageUrl(config.clientUrl, "google"));
+      return;
+    }
 
-      const now = new Date();
-      if (challenge.expiresAt <= now) {
-        await tx.registrationChallenge.deleteMany({ where: { email: body.email } });
-        return { kind: "expired" as const };
+    const email = payload?.email?.trim().toLowerCase();
+    if (
+      !payload?.sub ||
+      !email ||
+      payload.email_verified !== true ||
+      !payload.nonce ||
+      !safeEqual(payload.nonce, storedNonce) ||
+      !z.string().email().safeParse(email).success
+    ) {
+      res.redirect(302, loginPageUrl(config.clientUrl, "google"));
+      return;
+    }
+
+    const userSelect = {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      isActive: true,
+      emailVerified: true,
+      googleId: true,
+    } as const;
+    let user = await prisma.user.findUnique({
+      where: { googleId: payload.sub },
+      select: userSelect,
+    });
+
+    if (user && !user.isActive) {
+      res.redirect(302, loginPageUrl(config.clientUrl, "google"));
+      return;
+    }
+
+    if (user && user.email !== email) {
+      const emailOwner = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true },
+      });
+      if (emailOwner && emailOwner.id !== user.id) {
+        res.redirect(302, loginPageUrl(config.clientUrl, "google"));
+        return;
       }
-      if (challenge.attempts >= OTP_MAX_ATTEMPTS) {
-        return { kind: "locked" as const };
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { email, emailVerified: true },
+        select: userSelect,
+      });
+    } else if (!user) {
+      const existing = await prisma.user.findUnique({
+        where: { email },
+        select: userSelect,
+      });
+      if (
+        existing &&
+        (!existing.isActive || (existing.googleId && existing.googleId !== payload.sub))
+      ) {
+        res.redirect(302, loginPageUrl(config.clientUrl, "google"));
+        return;
       }
-      if (!verifyOtp(body.email, body.code, challenge.otpHash, config.otpHashSecret)) {
-        const updated = await tx.registrationChallenge.updateMany({
-          where: {
-            email: body.email,
-            otpHash: challenge.otpHash,
-            attempts: { lt: OTP_MAX_ATTEMPTS },
-            expiresAt: { gt: now },
-          },
-          data: { attempts: { increment: 1 } },
+      if (existing) {
+        user = await prisma.user.update({
+          where: { id: existing.id },
+          data: { googleId: payload.sub, emailVerified: true },
+          select: userSelect,
         });
-        return { kind: updated.count === 1 ? "incorrect" as const : "locked" as const };
+      } else {
+        user = await prisma.user.create({
+          data: {
+            email,
+            googleId: payload.sub,
+            name: (payload.name || email.split("@")[0]).slice(0, 120),
+            emailVerified: true,
+          },
+          select: userSelect,
+        });
       }
+    }
 
-      const claimed = await tx.registrationChallenge.deleteMany({
-        where: {
-          email: body.email,
-          otpHash: challenge.otpHash,
-          attempts: { lt: OTP_MAX_ATTEMPTS },
-          expiresAt: { gt: now },
-        },
+    if (!user.isActive) {
+      res.redirect(302, loginPageUrl(config.clientUrl, "google"));
+      return;
+    }
+
+    if (!user.emailVerified) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true },
+        select: userSelect,
       });
-      if (claimed.count !== 1) return { kind: "invalid" as const };
-
-      const existing = await tx.user.findUnique({ where: { email: body.email } });
-      if (existing?.emailVerified) return { kind: "already-verified" as const };
-      if (existing && !existing.isActive) return { kind: "inactive" as const };
-
-      const user = existing
-        ? await tx.user.update({
-            where: { id: existing.id },
-            data: {
-              name: challenge.name,
-              passwordHash: challenge.passwordHash,
-              emailVerified: true,
-            },
-            select: { id: true, name: true, email: true, role: true },
-          })
-        : await tx.user.create({
-            data: {
-              email: body.email,
-              name: challenge.name,
-              passwordHash: challenge.passwordHash,
-              emailVerified: true,
-            },
-            select: { id: true, name: true, email: true, role: true },
-          });
-      return { kind: "verified" as const, user };
-    });
-
-    if (outcome.kind === "incorrect") {
-      throw new HttpError(400, "The verification code is incorrect.");
-    }
-    if (outcome.kind === "expired" || outcome.kind === "invalid") {
-      throw new HttpError(400, "The verification code is invalid or expired.");
-    }
-    if (outcome.kind === "locked") {
-      throw new HttpError(429, "Too many incorrect codes. Request a new verification code.");
-    }
-    if (outcome.kind === "already-verified") {
-      throw new HttpError(409, "This school email already has an account. Sign in instead.");
-    }
-    if (outcome.kind === "inactive") {
-      throw new HttpError(403, "This school account is inactive. Contact the school administrator.");
-    }
-    if (outcome.kind !== "verified") {
-      throw new HttpError(400, "The verification code could not be used. Request a new code.");
     }
 
-    await createLoginSession(prisma, outcome.user.id, config.nodeEnv === "production", res);
-    res.status(201).json({ user: outcome.user });
-  });
-
-  router.post("/auth/login", async (req, res) => {
-    const body = parseBody(loginSchema, req.body);
-    const user = await prisma.user.findUnique({ where: { email: body.email } });
-    const passwordMatches = await bcrypt.compare(
-      body.password,
-      user?.passwordHash ?? dummyPasswordHash,
-    );
-    if (!user || !user.isActive || !user.emailVerified || !user.passwordHash || !passwordMatches) {
-      throw new HttpError(401, "Email or password is incorrect.");
-    }
-
-    await createLoginSession(prisma, user.id, config.nodeEnv === "production", res);
-    res.json({
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
-    });
+    await createLoginSession(prisma, user.id, secure, res);
+    res.redirect(302, new URL("/home.html", config.clientUrl).toString());
   });
 
   router.get("/auth/session", auth, requirePermission("student-life:read"), async (req, res) => {
@@ -366,7 +334,7 @@ export function createApiRouter(
         displayName: user.name,
         role: user.role.toLowerCase().replaceAll("_", "-"),
         permissions: permissionsForRole(user.role),
-        schoolEmailVerified: user.emailVerified,
+        emailVerified: user.emailVerified,
       },
       csrfToken: req.user?.csrfToken ?? null,
     });

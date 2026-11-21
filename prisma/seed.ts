@@ -1,13 +1,13 @@
 import "dotenv/config";
 import { PrismaClient, UserRole } from "@prisma/client";
-import { isSchoolEmail } from "../src/otp";
+import { z } from "zod";
 
 const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
   const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-  if (!email || !isSchoolEmail(email)) {
-    throw new Error("Set ADMIN_EMAIL to the administrator's @nutm.edu.ng school address.");
+  if (!email || !z.string().email().safeParse(email).success) {
+    throw new Error("Set ADMIN_EMAIL to the administrator's Google account email.");
   }
 
   await prisma.user.upsert({
@@ -17,7 +17,6 @@ async function main(): Promise<void> {
       name: "DIS Administrator",
       email,
       role: UserRole.ADMIN,
-      passwordHash: null,
       emailVerified: false,
     },
   });
