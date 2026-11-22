@@ -68,6 +68,15 @@ All API paths are under `/api`.
 | POST | `/webhooks/stripe` | Stripe-signed webhook |
 | GET | `/student-life/notices` | Signed-in user |
 | POST | `/student-life/notices` | Administrator |
+| GET | `/community/profile` | Verified signed-in user |
+| PATCH | `/community/profile` | Verified signed-in user; CSRF protected |
+| GET | `/community/peers` | Verified signed-in user; opted-in profiles only |
+| POST | `/community/connections/:userId` | Verified signed-in user; CSRF protected |
+| PATCH | `/community/connections/:connectionId` | Request recipient; CSRF protected |
+| POST | `/community/game-invites` | Connected students; CSRF protected |
+| PATCH | `/community/game-invites/:inviteId` | Invite recipient; CSRF protected |
+| GET | `/community/meetups` | Verified signed-in user |
+| PATCH | `/community/meetups/:meetup/interest` | Verified signed-in user; CSRF protected |
 
 The browser uses an HTTP-only session cookie and a CSRF token for state-changing requests. New accounts are students; administrators assign club-leader roles. A club leader must be assigned the `CLUB_LEADER` role before an administrator can create a club for them.
 
@@ -75,10 +84,13 @@ Membership and activity fees are one-time charges set in cents by administrators
 
 Attendance awards 10 participation points, plus 5 for punctuality and 3 for good conduct. Badges are awarded at 10 attendances, 5 punctual attendances, and 5 good-conduct attendances.
 
+Community profiles are hidden by default. Students can opt in and choose which broad interests to show; the directory never returns email addresses or contact details. Connection requests, accepted connections, game invitations, and meetup interest are stored in PostgreSQL. Apply migration `0007_community_features` with `npx prisma migrate deploy` before using these features. Attendance is recorded by a club leader or administrator, not by students themselves.
+
 ## Security baseline
 
 - Google sign-in validates the OAuth state, nonce, token audience/signature, and verified email.
 - Administrator account totals and student participation details are available only to authenticated administrators.
+- Community endpoints require a verified account; public directory listings require explicit profile opt-in and expose only a student's name and selected interests.
 - Password and OTP sign-in endpoints have been removed; Google OAuth credentials are used only on the backend.
 - Browser sessions expire after eight hours; only hashes of session tokens are stored in PostgreSQL.
 - Helmet, exact-origin CORS, request-size limits, CSRF protections, and role/record-level authorization protect API requests.

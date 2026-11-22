@@ -64,9 +64,33 @@
                 <span class="community-safety-icon" aria-hidden="true">✓</span>
                 <div>
                     <strong>Sign in with a Google account</strong>
-                    <p>DIS verifies your Google email but does not verify school enrollment. Keep personal contact details private, and meet in approved school areas.</p>
+                    <p>DIS verifies your Google email but does not verify school enrollment. Sharing your profile is optional; keep personal contact details private and meet in approved school areas.</p>
                 </div>
                 <span class="community-verified">Google verified</span>
+            </section>
+
+            <section class="panel community-profile-panel" aria-labelledby="community-profile-title">
+                <div class="panel-heading">
+                    <div>
+                        <p class="section-kicker">YOUR PRIVACY</p>
+                        <h2 id="community-profile-title">Choose what other students can see</h2>
+                        <p class="panel-subtitle">Your profile is hidden until you opt in. Your email and contact details are never shown.</p>
+                    </div>
+                </div>
+                <form id="community-profile-form">
+                    <label class="community-visibility-option">
+                        <input id="community-visible" type="checkbox">
+                        <span><strong>Show my profile in the student directory</strong><small>Only your name and selected interests will be shared.</small></span>
+                    </label>
+                    <fieldset class="community-interest-options">
+                        <legend>Interests to show</legend>
+                        <label><input type="checkbox" name="community-interest" value="games"> Games</label>
+                        <label><input type="checkbox" name="community-interest" value="study"> Study</label>
+                        <label><input type="checkbox" name="community-interest" value="creative"> Creative</label>
+                    </fieldset>
+                    <button class="button button-primary" id="community-profile-save" type="submit">Save privacy settings</button>
+                    <p class="community-feedback" id="community-profile-status" role="status" aria-live="polite"></p>
+                </form>
             </section>
 
             <section class="panel community-panel" aria-labelledby="student-directory-title">
@@ -76,7 +100,7 @@
                         <h2 id="student-directory-title">People open to connecting</h2>
                         <p class="panel-subtitle">Browse shared interests and send a friendly request.</p>
                     </div>
-                    <label class="search-box community-search"><span>⌕</span><input id="peer-search" type="search" placeholder="Search interests..." aria-label="Search students by name or interest"></label>
+                    <label class="search-box community-search"><span>⌕</span><input id="peer-search" type="search" placeholder="Search students..." aria-label="Search students by name"></label>
                 </div>
                 <div class="filter-tabs community-filters" role="group" aria-label="Filter students by interest">
                     <button class="filter-tab active" type="button" data-interest="all">Everyone</button>
@@ -84,45 +108,8 @@
                     <button class="filter-tab" type="button" data-interest="study">Study</button>
                     <button class="filter-tab" type="button" data-interest="creative">Creative</button>
                 </div>
-                <p class="community-preview-note">Sample profiles for the frontend preview. Connect and game invitations are not sent yet.</p>
-                <div class="peer-grid" id="peer-grid">
-                    <article class="peer-card" data-peer data-interest="games study" data-search="sam games chess coding study">
-                        <div class="peer-card-heading">
-                            <span class="peer-avatar peer-avatar-green" aria-hidden="true">S</span>
-                            <div><h3>Sam</h3><span class="peer-status"><i></i>Open to meet</span></div>
-                        </div>
-                        <p class="peer-description">Likes chess, coding projects, and learning strategy games.</p>
-                        <div class="interest-tags"><span>Chess</span><span>Coding</span><span>Study group</span></div>
-                        <div class="peer-actions">
-                            <button class="connection-button" type="button" data-action="connect">Connect</button>
-                            <button class="game-invite-button" type="button" data-action="game">Invite to a game</button>
-                        </div>
-                    </article>
-                    <article class="peer-card" data-peer data-interest="games creative" data-search="lee games art trivia design">
-                        <div class="peer-card-heading">
-                            <span class="peer-avatar peer-avatar-peach" aria-hidden="true">L</span>
-                            <div><h3>Lee</h3><span class="peer-status"><i></i>Open to meet</span></div>
-                        </div>
-                        <p class="peer-description">Enjoys art, quick trivia rounds, and making posters for school events.</p>
-                        <div class="interest-tags"><span>Trivia</span><span>Design</span><span>Art</span></div>
-                        <div class="peer-actions">
-                            <button class="connection-button" type="button" data-action="connect">Connect</button>
-                            <button class="game-invite-button" type="button" data-action="game">Invite to a game</button>
-                        </div>
-                    </article>
-                    <article class="peer-card" data-peer data-interest="study creative" data-search="noor study reading writing book club">
-                        <div class="peer-card-heading">
-                            <span class="peer-avatar peer-avatar-lilac" aria-hidden="true">N</span>
-                            <div><h3>Noor</h3><span class="peer-status"><i></i>Open to meet</span></div>
-                        </div>
-                        <p class="peer-description">Looking for a reading buddy and friends for the school book club.</p>
-                        <div class="interest-tags"><span>Reading</span><span>Writing</span><span>Book club</span></div>
-                        <div class="peer-actions">
-                            <button class="connection-button" type="button" data-action="connect">Connect</button>
-                            <button class="game-invite-button" type="button" data-action="game">Invite to a game</button>
-                        </div>
-                    </article>
-                </div>
+                <p class="community-preview-note">Only students who opt in appear here. Connect requests and game invitations are saved to your account.</p>
+                <div class="peer-grid" id="peer-grid"></div>
                 <p class="empty-state" id="empty-peers" hidden>No students match that search. Try another interest.</p>
                 <p class="community-feedback" id="community-feedback" role="status" aria-live="polite"></p>
             </section>
@@ -134,9 +121,9 @@
                     </div>
                     <p class="panel-subtitle">Pick a game and invite someone you know from school.</p>
                     <div class="game-list">
-                        <div class="game-row"><span class="game-icon">♟</span><div><strong>Chess</strong><span>One-on-one strategy</span></div><button type="button" data-game="chess">Find a player</button></div>
-                        <div class="game-row"><span class="game-icon">✳</span><div><strong>Quick quiz</strong><span>Short team trivia</span></div><button type="button" data-game="quiz">Find a player</button></div>
-                        <div class="game-row"><span class="game-icon">▦</span><div><strong>Word challenge</strong><span>Make words together</span></div><button type="button" data-game="words">Find a player</button></div>
+                        <div class="game-row"><span class="game-icon">♟</span><div><strong>Chess</strong><span>One-on-one strategy</span></div><button type="button" data-game="CHESS">Choose game</button></div>
+                        <div class="game-row"><span class="game-icon">✳</span><div><strong>Quick quiz</strong><span>Short team trivia</span></div><button type="button" data-game="QUIZ">Choose game</button></div>
+                        <div class="game-row"><span class="game-icon">▦</span><div><strong>Word challenge</strong><span>Make words together</span></div><button type="button" data-game="WORDS">Choose game</button></div>
                     </div>
                 </article>
                 <article class="panel meetup-panel" id="meetups">
@@ -147,12 +134,12 @@
                     <div class="meetup-row">
                         <div class="meetup-date"><strong>WED</strong><span>3:30 PM</span></div>
                         <div><strong>Lunch-break chess</strong><span>NUTM student commons</span></div>
-                        <button type="button" data-meetup="chess">I’m interested</button>
+                        <button type="button" data-meetup="CHESS">I’m interested</button>
                     </div>
                     <div class="meetup-row">
                         <div class="meetup-date meetup-date-alt"><strong>FRI</strong><span>3:15 PM</span></div>
                         <div><strong>Art and games afternoon</strong><span>School activity room</span></div>
-                        <button type="button" data-meetup="art">I’m interested</button>
+                        <button type="button" data-meetup="ART">I’m interested</button>
                     </div>
                 </article>
             </section>

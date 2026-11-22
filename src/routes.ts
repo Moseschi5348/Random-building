@@ -2,6 +2,9 @@ import { Router, type Request, type Response } from "express";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { OAuth2Client } from "google-auth-library";
 import {
+  CommunityGameKey,
+  CommunityMeetupKey,
+  CommunityRequestStatus,
   MembershipStatus,
   NoticeLevel,
   RegistrationStatus,
@@ -49,6 +52,25 @@ const noticeSchema = z.object({
   message: z.string().trim().min(1).max(2000),
   level: z.enum(["emergency", "important", "general"]),
   endsAt: z.string().datetime().transform((value) => new Date(value)).optional(),
+});
+
+const communityProfileSchema = z.object({
+  visible: z.boolean(),
+  interests: z.array(z.enum(["games", "study", "creative"])).max(3)
+    .refine((interests) => new Set(interests).size === interests.length),
+});
+
+const communityRequestStatusSchema = z.object({
+  status: z.enum(["ACCEPTED", "DECLINED"]),
+});
+
+const communityGameInviteSchema = z.object({
+  recipientId: z.string().min(1),
+  game: z.nativeEnum(CommunityGameKey),
+});
+
+const communityMeetupInterestSchema = z.object({
+  interested: z.boolean(),
 });
 
 const adminUsersQuerySchema = z.object({
@@ -521,6 +543,10 @@ export function createApiRouter(
           },
           orderBy: { createdAt: "desc" },
         },
+        attendance: {
+          select: { punctual: true, goodConduct: true, createdAt: true },
+          orderBy: { createdAt: "desc" },
+        },
         _count: { select: { attendance: true } },
       },
     });
@@ -529,6 +555,323 @@ export function createApiRouter(
     }
     res.json(user);
   });
+
+  router.get("/community/profile", auth, requirePermission("community:read"), async (req, res) => {
+    const user = await prisma.user.findUnique({
+      where: { id: currentUserId(req) },
+      select: { communityVisible: true, communityInterests: true },
+    });
+    if (!user) {
+      throw new HttpError(404, "User not found.");
+    }
+    res.json({ visible: user.communityVisible, interests: user.communityInterests });
+  });
+
+  router.patch("/community/profile", auth, requirePermission("community:read"), async (req, res) => {
+    const body = parseBody(communityProfileSchema, req.body);
+    const profile = await prisma.user.update({
+      where: { id: currentUserId(req) },
+      data: {
+        communityVisible: body.visible,
+        communityInterests: body.visible ? body.interests : [],
+      },
+      select: { communityVisible: true, communityInterests: true },
+    });
+    res.json({ visible: profile.communityVisible, interests: profile.communityInterests });
+  });
+
+  router.get("/community/peers", auth, requirePermission("community:read"), async (req, res) => {
+    const userId = currentUserId(req);
+    const interest = z.enum(["games", "study", "creative"]).safeParse(req.query.interest);
+    if (req.query.interest !== undefined && !interest.success) {
+      throw new HttpError(400, "Invalid community interest.");
+    }
+    const search = z.string().trim().max(100).safeParse(req.query.search ?? "");
+    if (!search.success) {
+      throw new HttpError(400, "Search text must be 100 characters or fewer.");
+    }
+
+    const [connections, gameInvites] = await Promise.all([
+      prisma.communityConnection.findMany({
+        where: { OR: [{ requesterId: userId }, { recipientId: userId }] },
+      }),
+      prisma.communityGameInvite.findMany({
+        where: { OR: [{ senderId: userId }, { recipientId: userId }] },
+      }),
+    ]);
+    const relatedIds = [...new Set([
+      ...connections.map((connection) =>
+        connection.requesterId === userId ? connection.recipientId : connection.requesterId
+      ),
+      ...gameInvites.map((invite) => invite.senderId === userId ? invite.recipientId : invite.senderId),
+    ])];
+    const communityProfiles = await prisma.user.findMany({
+      where: {
+        id: { not: userId },
+        isActive: true,
+        emailVerified: true,
+        role: { not: UserRole.ADMIN },
+        ...(search.data ? { name: { contains: search.data, mode: "insensitive" as const } } : {}),
+        OR: [
+          {
+            communityVisible: true,
+            ...(interest.success && interest.data
+              ? { communityInterests: { has: interest.data } }
+              : {}),
+          },
+          ...(relatedIds.length > 0 ? [{ id: { in: relatedIds } }] : []),
+        ],
+      },
+      orderBy: { name: "asc" },
+      take: 100,
+      select: { id: true, name: true, communityVisible: true, communityInterests: true },
+    });
+
+    res.json(communityProfiles.map((profile) => {
+      const peerConnections = connections.filter((connection) =>
+        connection.requesterId === profile.id || connection.recipientId === profile.id
+      );
+      const peerInvites = gameInvites.filter((invite) =>
+        invite.senderId === profile.id || invite.recipientId === profile.id
+      );
+      const connection = peerConnections.sort(
+        (left, right) => right.updatedAt.getTime() - left.updatedAt.getTime(),
+      )[0];
+      const gameInvite = peerInvites
+        .filter((invite) => invite.status === CommunityRequestStatus.PENDING)
+        .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())[0];
+      return {
+        id: profile.id,
+        name: profile.name,
+        communityVisible: profile.communityVisible,
+        interests: profile.communityInterests,
+        connection: connection
+          ? {
+              id: connection.id,
+              status: connection.status,
+              requesterId: connection.requesterId,
+              recipientId: connection.recipientId,
+            }
+          : null,
+        gameInvite: gameInvite
+          ? {
+              id: gameInvite.id,
+              game: gameInvite.game,
+              status: gameInvite.status,
+              senderId: gameInvite.senderId,
+              recipientId: gameInvite.recipientId,
+            }
+          : null,
+      };
+    }));
+  });
+
+  router.post(
+    "/community/connections/:userId",
+    auth,
+    requirePermission("community:read"),
+    async (req, res) => {
+      const requesterId = currentUserId(req);
+      const recipientId = routeParam(req, "userId");
+      if (requesterId === recipientId) {
+        throw new HttpError(400, "You cannot send a connection request to yourself.");
+      }
+      const recipient = await prisma.user.findFirst({
+        where: {
+          id: recipientId,
+          isActive: true,
+          emailVerified: true,
+          role: { not: UserRole.ADMIN },
+          communityVisible: true,
+        },
+        select: { id: true },
+      });
+      if (!recipient) {
+        throw new HttpError(404, "This student is not available for connection requests.");
+      }
+
+      const existing = await prisma.communityConnection.findFirst({
+        where: {
+          OR: [
+            { requesterId, recipientId },
+            { requesterId: recipientId, recipientId: requesterId },
+          ],
+        },
+      });
+      let connection;
+      if (existing?.status === CommunityRequestStatus.PENDING) {
+        if (existing.requesterId === recipientId) {
+          connection = await prisma.communityConnection.update({
+            where: { id: existing.id },
+            data: { status: CommunityRequestStatus.ACCEPTED },
+          });
+        } else {
+          throw new HttpError(409, "A connection request is already pending.");
+        }
+      } else if (existing?.status === CommunityRequestStatus.ACCEPTED) {
+        throw new HttpError(409, "You are already connected.");
+      } else if (existing) {
+        connection = await prisma.communityConnection.update({
+          where: { id: existing.id },
+          data: {
+            requesterId,
+            recipientId,
+            status: CommunityRequestStatus.PENDING,
+          },
+        });
+      } else {
+        connection = await prisma.communityConnection.create({
+          data: { requesterId, recipientId },
+        });
+      }
+      res.status(201).json({ connection });
+    },
+  );
+
+  router.patch(
+    "/community/connections/:connectionId",
+    auth,
+    requirePermission("community:read"),
+    async (req, res) => {
+      const body = parseBody(communityRequestStatusSchema, req.body);
+      const connectionId = routeParam(req, "connectionId");
+      const connection = await prisma.communityConnection.findUnique({
+        where: { id: connectionId },
+      });
+      if (!connection || connection.recipientId !== currentUserId(req)) {
+        throw new HttpError(404, "Connection request not found.");
+      }
+      if (connection.status !== CommunityRequestStatus.PENDING) {
+        throw new HttpError(409, "This connection request has already been handled.");
+      }
+      const updated = await prisma.communityConnection.update({
+        where: { id: connectionId },
+        data: { status: body.status },
+      });
+      res.json({ connection: updated });
+    },
+  );
+
+  router.post("/community/game-invites", auth, requirePermission("community:read"), async (req, res) => {
+    const body = parseBody(communityGameInviteSchema, req.body);
+    const senderId = currentUserId(req);
+    if (senderId === body.recipientId) {
+      throw new HttpError(400, "You cannot invite yourself to a game.");
+    }
+    const [recipient, connection] = await Promise.all([
+      prisma.user.findFirst({
+        where: {
+          id: body.recipientId,
+          isActive: true,
+          emailVerified: true,
+          role: { not: UserRole.ADMIN },
+          communityVisible: true,
+        },
+        select: { id: true },
+      }),
+      prisma.communityConnection.findFirst({
+        where: {
+          status: CommunityRequestStatus.ACCEPTED,
+          OR: [
+            { requesterId: senderId, recipientId: body.recipientId },
+            { requesterId: body.recipientId, recipientId: senderId },
+          ],
+        },
+      }),
+    ]);
+    if (!recipient) {
+      throw new HttpError(404, "This student is not available for game invitations.");
+    }
+    if (!connection) {
+      throw new HttpError(403, "Connect with this student before sending a game invitation.");
+    }
+    const pending = await prisma.communityGameInvite.findFirst({
+      where: {
+        senderId,
+        recipientId: body.recipientId,
+        game: body.game,
+        status: CommunityRequestStatus.PENDING,
+      },
+    });
+    if (pending) {
+      throw new HttpError(409, "A game invitation is already pending.");
+    }
+    const gameInvite = await prisma.communityGameInvite.create({
+      data: { senderId, recipientId: body.recipientId, game: body.game },
+    });
+    res.status(201).json({ gameInvite });
+  });
+
+  router.patch(
+    "/community/game-invites/:inviteId",
+    auth,
+    requirePermission("community:read"),
+    async (req, res) => {
+      const body = parseBody(communityRequestStatusSchema, req.body);
+      const inviteId = routeParam(req, "inviteId");
+      const invite = await prisma.communityGameInvite.findUnique({ where: { id: inviteId } });
+      if (!invite || invite.recipientId !== currentUserId(req)) {
+        throw new HttpError(404, "Game invitation not found.");
+      }
+      if (invite.status !== CommunityRequestStatus.PENDING) {
+        throw new HttpError(409, "This game invitation has already been handled.");
+      }
+      const updated = await prisma.communityGameInvite.update({
+        where: { id: inviteId },
+        data: { status: body.status },
+      });
+      res.json({ gameInvite: updated });
+    },
+  );
+
+  router.get("/community/meetups", auth, requirePermission("community:read"), async (req, res) => {
+    const userId = currentUserId(req);
+    const [counts, mine] = await Promise.all([
+      prisma.communityMeetupInterest.groupBy({
+        by: ["meetup"],
+        _count: { _all: true },
+      }),
+      prisma.communityMeetupInterest.findMany({
+        where: { userId },
+        select: { meetup: true },
+      }),
+    ]);
+    const countByMeetup = new Map(counts.map((entry) => [entry.meetup, entry._count._all]));
+    const myInterests = new Set(mine.map((entry) => entry.meetup));
+    res.json([
+      { key: CommunityMeetupKey.CHESS, interestedCount: countByMeetup.get(CommunityMeetupKey.CHESS) ?? 0 },
+      { key: CommunityMeetupKey.ART, interestedCount: countByMeetup.get(CommunityMeetupKey.ART) ?? 0 },
+    ].map((meetup) => ({ ...meetup, interested: myInterests.has(meetup.key) })));
+  });
+
+  router.patch(
+    "/community/meetups/:meetup/interest",
+    auth,
+    requirePermission("community:read"),
+    async (req, res) => {
+      const meetup = z.nativeEnum(CommunityMeetupKey).safeParse(routeParam(req, "meetup"));
+      if (!meetup.success) {
+        throw new HttpError(400, "Invalid meetup.");
+      }
+      const body = parseBody(communityMeetupInterestSchema, req.body);
+      const userId = currentUserId(req);
+      if (body.interested) {
+        await prisma.communityMeetupInterest.upsert({
+          where: { userId_meetup: { userId, meetup: meetup.data } },
+          create: { userId, meetup: meetup.data },
+          update: {},
+        });
+      } else {
+        await prisma.communityMeetupInterest.deleteMany({
+          where: { userId, meetup: meetup.data },
+        });
+      }
+      const interestedCount = await prisma.communityMeetupInterest.count({
+        where: { meetup: meetup.data },
+      });
+      res.json({ meetup: meetup.data, interested: body.interested, interestedCount });
+    },
+  );
 
   router.patch("/users/:userId/role", auth, requireRole(UserRole.ADMIN), async (req, res) => {
     const body = parseBody(z.object({ role: z.nativeEnum(UserRole) }), req.body);

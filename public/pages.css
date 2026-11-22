@@ -674,6 +674,16 @@ html[data-theme="dark"] .notice-unavailable { border-color: var(--border-main); 
 .community-safety p { margin: 4px 0 0; color: var(--text-muted); font-size: 14px; line-height: 1.5; }
 .community-verified { flex: 0 0 auto; padding: 6px 9px; border-radius: 20px; background: var(--forest-pale); color: var(--forest-strong); font-size: 12px; font-weight: 650; }
 .community-panel { margin-top: 0; }
+.community-profile-panel { margin: 0 0 15px; }
+.community-profile-panel form { display: grid; gap: 13px; }
+.community-visibility-option { display: flex; align-items: flex-start; gap: 10px; color: var(--text-main); }
+.community-visibility-option input,
+.community-interest-options input { accent-color: var(--forest); }
+.community-visibility-option span { display: grid; gap: 4px; }
+.community-visibility-option small { color: var(--text-muted); font-size: 12px; }
+.community-interest-options { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; padding: 0; border: 0; color: var(--text-muted); }
+.community-interest-options legend { margin-bottom: 7px; color: var(--text-main); font-size: 13px; font-weight: 650; }
+.community-interest-options label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .community-panel-heading { align-items: flex-end; gap: 16px; }
 .community-panel-heading .panel-subtitle { margin-top: 6px; }
 .community-search { flex: 0 1 260px; width: auto; }
@@ -695,8 +705,10 @@ html[data-theme="dark"] .notice-unavailable { border-color: var(--border-main); 
 .interest-tags span { padding: 5px 8px; border-radius: 20px; background: var(--forest-pale); color: var(--forest-strong); font-size: 12px; }
 .peer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .peer-actions button, .game-row button, .meetup-row button { min-height: 36px; padding: 7px 10px; border: 1px solid var(--border-main); border-radius: 6px; background: var(--surface); color: var(--text-main); font: inherit; font-size: 13px; cursor: pointer; }
+.peer-actions button:disabled, .game-row button:disabled, .meetup-row button:disabled { cursor: not-allowed; opacity: .6; }
 .peer-actions .connection-button { border-color: var(--forest); background: var(--forest); color: var(--surface); }
 .peer-actions .game-invite-button { color: var(--forest-strong); }
+.peer-actions .secondary-action { color: var(--text-muted); }
 .peer-actions button.is-selected, .game-row button.is-selected, .meetup-row button.is-selected { border-color: var(--forest); background: var(--forest-pale); color: var(--forest-strong); }
 .community-feedback { min-height: 18px; margin: 12px 0 0; color: var(--text-muted); font-size: 13px; }
 .community-lower-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 14px; margin-top: 15px; }

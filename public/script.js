@@ -125,13 +125,20 @@ function createClubCard(club) {
 
 function renderClubs() {
     const grid = document.querySelector("#club-grid");
+    if (!grid) return;
+    document.querySelectorAll(".nav-count").forEach((count) => {
+        count.textContent = String(state.clubs.length);
+    });
+    const allClubsTab = document.querySelector('.filter-tab[data-filter="all"] span');
+    if (allClubsTab) allClubsTab.textContent = String(state.clubs.length);
     grid.replaceChildren();
     if (state.clubs.length === 0) {
         const empty = document.createElement("p");
         empty.className = "empty-state";
         empty.textContent = "There are no clubs to display.";
         grid.append(empty);
-        document.querySelector("#empty-clubs").hidden = true;
+        const noMatches = document.querySelector("#empty-clubs");
+        if (noMatches) noMatches.hidden = true;
         return;
     }
     state.clubs.forEach((club) => grid.append(createClubCard(club)));
@@ -196,27 +203,32 @@ function createEventCard(activity, index) {
 
 function renderActivities() {
     const upcoming = document.querySelector("#upcoming-list");
-    upcoming.replaceChildren();
-    const nextActivities = state.activities.slice(0, 2);
-    if (nextActivities.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "empty-state";
-        empty.textContent = "No upcoming activities.";
-        upcoming.append(empty);
-    } else {
-        nextActivities.forEach((activity, index) => {
-            upcoming.append(createEventCard(activity, index));
-        });
+    if (upcoming) {
+        upcoming.replaceChildren();
+        const nextActivities = state.activities.slice(0, 2);
+        if (nextActivities.length === 0) {
+            const empty = document.createElement("p");
+            empty.className = "empty-state";
+            empty.textContent = "No upcoming activities.";
+            upcoming.append(empty);
+        } else {
+            nextActivities.forEach((activity, index) => {
+                upcoming.append(createEventCard(activity, index));
+            });
+        }
     }
 
     const list = document.querySelector("#my-clubs-list");
+    if (!list) return;
     list.replaceChildren();
     const activeMemberships = state.user.memberships.filter((item) => item.status !== "CANCELLED");
     const registrations = state.user.registrations.filter((item) =>
         item.status === "CONFIRMED" || item.status === "PENDING"
     );
-    document.querySelector("#activity-count").textContent =
-        `${activeMemberships.length + registrations.length} active`;
+    const activityCount = document.querySelector("#activity-count");
+    if (activityCount) {
+        activityCount.textContent = `${activeMemberships.length + registrations.length} active`;
+    }
 
     activeMemberships.forEach((membership) => {
         const row = document.createElement("div");
@@ -293,18 +305,33 @@ function renderRewards() {
     const badges = state.user.badges;
     const earned = new Set(badges.map((badge) => badge.key));
     const remaining = Math.max(0, 10 - attendanceCount);
-    document.querySelector("#next-badge-title").textContent =
-        earned.has("PARTICIPATION_10") ? "Participation earned" : "Participation";
-    document.querySelector("#next-badge-copy").textContent =
+    const onTimeCount = state.user.attendance.filter((item) => item.punctual).length;
+    const setText = (selector, value) => {
+        const element = document.querySelector(selector);
+        if (element) element.textContent = value;
+    };
+    setText("#next-badge-title", earned.has("PARTICIPATION_10") ? "Participation earned" : "Participation");
+    setText(
+        "#next-badge-copy",
         earned.has("PARTICIPATION_10")
             ? "Keep showing up to earn more rewards."
-            : `${remaining} more ${remaining === 1 ? "attendance" : "attendances"} to earn this badge.`;
-    document.querySelector("#progress-count").textContent = String(Math.min(attendanceCount, 10));
-    document.querySelector("#progress-total").textContent = "/ 10";
-    document.querySelector("#reward-progress").setAttribute(
-        "aria-label",
-        `Participation badge progress: ${Math.min(attendanceCount, 10)} of 10 attendances`
+            : `${remaining} more ${remaining === 1 ? "attendance" : "attendances"} to earn this badge.`
     );
+    setText("#progress-count", String(Math.min(attendanceCount, 10)));
+    setText("#progress-total", "/ 10");
+    setText("#attendance-total", String(attendanceCount));
+    setText("#attendance-total-summary", String(attendanceCount));
+    setText("#punctual-total", String(onTimeCount));
+    const progress = document.querySelector("#reward-progress");
+    if (progress) {
+        const progressPercent = Math.min(attendanceCount, 10) * 10;
+        progress.style.background =
+            `conic-gradient(var(--forest) ${progressPercent}%, var(--forest-pale) ${progressPercent}% 100%)`;
+        progress.setAttribute(
+            "aria-label",
+            `Participation badge progress: ${Math.min(attendanceCount, 10)} of 10 attendances`
+        );
+    }
 
     const labels = {
         PARTICIPATION_10: { name: "Participation", icon: "★", style: "badge-star" },
@@ -312,6 +339,7 @@ function renderRewards() {
         GOOD_CONDUCT_5: { name: "Good conduct", icon: "♥", style: "badge-heart" }
     };
     const row = document.querySelector("#badges-row");
+    if (!row) return;
     row.replaceChildren();
     if (badges.length === 0) {
         const empty = document.createElement("p");
@@ -335,20 +363,25 @@ function renderRewards() {
 }
 
 function renderDashboard() {
-    document.querySelector("#points-total").textContent = state.user.points.toLocaleString();
+    const setText = (selector, value) => {
+        const element = document.querySelector(selector);
+        if (element) element.textContent = value;
+    };
+    setText("#points-total", state.user.points.toLocaleString());
     const attendanceCount = state.user._count.attendance;
-    document.querySelector("#attendance-count").textContent = String(attendanceCount);
-    document.querySelector("#attendance-summary-count").textContent = String(attendanceCount);
-    document.querySelector("#club-count").textContent = String(
+    setText("#attendance-count", String(attendanceCount));
+    setText("#attendance-summary-count", String(attendanceCount));
+    setText("#club-count", String(
         state.user.memberships.filter((membership) => membership.status === "ACTIVE").length
-    );
-    document.querySelector("#badge-count").textContent = String(state.user.badges.length);
+    ));
+    setText("#badge-count", String(state.user.badges.length));
     renderClubs();
     renderActivities();
-    renderRewards();
+    if (document.querySelector("#points-total, #badges-row, #reward-progress")) renderRewards();
 }
 
 function updateClubVisibility() {
+    if (!document.querySelector("#club-grid")) return;
     const filter = document.querySelector(".filter-tab.active")?.dataset.filter || "all";
     let visibleCount = 0;
     document.querySelectorAll(".club-card").forEach((card) => {
@@ -357,7 +390,8 @@ function updateClubVisibility() {
         card.hidden = !matchesFilter || !matchesSearch;
         if (!card.hidden) visibleCount += 1;
     });
-    document.querySelector("#empty-clubs").hidden = visibleCount > 0;
+    const empty = document.querySelector("#empty-clubs");
+    if (empty) empty.hidden = visibleCount > 0;
 }
 
 async function loadDashboard() {
@@ -385,10 +419,13 @@ document.querySelectorAll(".filter-tab[data-filter]").forEach((tab) => {
     });
 });
 
-document.querySelector("#club-search").addEventListener("input", (event) => {
-    state.search = event.target.value.trim().toLowerCase();
-    updateClubVisibility();
-});
+const clubSearch = document.querySelector("#club-search");
+if (clubSearch) {
+    clubSearch.addEventListener("input", (event) => {
+        state.search = event.target.value.trim().toLowerCase();
+        updateClubVisibility();
+    });
+}
 
 document.querySelectorAll(".nav-link").forEach((link) => {
     link.addEventListener("click", () => {
@@ -398,6 +435,7 @@ document.querySelectorAll(".nav-link").forEach((link) => {
 });
 
 window.addEventListener("northstar:session-ready", () => {
+    if (!document.querySelector("#club-grid, #upcoming-list, #my-clubs-list, #points-total")) return;
     loadDashboard().catch((error) => {
         showToast(error.message || "Could not load student life data.");
     });

@@ -148,7 +148,7 @@ h2 { margin: 0; color: #2b2c40; font-size: 15px; font-weight: 680; letter-spacin
 .checkin-strip strong, .checkin-strip div span { display: block; }
 .checkin-strip strong { color: #45445f; font-size: 9px; }
 .checkin-strip div span { margin-top: 3px; color: #9292a5; font-size: 8px; }
-.checkin-button { margin-left: auto; padding: 7px 9px; border: 0; border-radius: 6px; background: #7063dd; color: white; font-size: 8px; white-space: nowrap; cursor: pointer; }
+.checkin-button { display: inline-flex; align-items: center; margin-left: auto; padding: 7px 9px; border: 0; border-radius: 6px; background: #7063dd; color: white; font-size: 8px; text-decoration: none; white-space: nowrap; cursor: pointer; }
 .checkin-button:disabled { background: #e9e7f4; color: #817e9f; cursor: default; }
 .checkin-button span { margin-left: 4px; }
 .text-link { color: #7063d9; font-size: 9px; font-weight: 600; white-space: nowrap; }

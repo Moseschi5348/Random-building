@@ -67,15 +67,15 @@
                 </article>
                 <article class="stat-card">
                     <div class="stat-icon icon-peach">◷</div>
-                    <div class="stat-label">Attendance streak</div>
-                    <div class="stat-bottom"><strong><span id="streak-count">8</span> days</strong><span class="streak-flame">✦</span></div>
-                    <div class="stat-foot">Your longest streak: 12 days</div>
+                    <div class="stat-label">Activities attended</div>
+                    <div class="stat-bottom"><strong id="attendance-total">0</strong></div>
+                    <div class="stat-foot">Attendance recorded by club leaders</div>
                 </article>
                 <article class="stat-card">
                     <div class="stat-icon icon-mint">✓</div>
-                    <div class="stat-label">Attendance rate</div>
-                    <div class="stat-bottom"><strong>96%</strong></div>
-                    <div class="stat-foot">Across your activities</div>
+                    <div class="stat-label">On-time activities</div>
+                    <div class="stat-bottom"><strong id="punctual-total">0</strong></div>
+                    <div class="stat-foot">Based on recorded attendance</div>
                 </article>
                 <article class="stat-card">
                     <div class="stat-icon icon-yellow">♧</div>
@@ -88,38 +88,25 @@
             <section class="dashboard-grid">
                 <article class="panel attendance-panel">
                     <div class="panel-heading">
-                        <div><p class="section-kicker">SHOWING UP</p><h2>Attendance overview</h2></div>
-                        <button class="select-button" type="button" aria-label="Selected period: This week">This week <span>⌄</span></button>
+                        <div><p class="section-kicker">SHOWING UP</p><h2>Your attendance</h2></div>
                     </div>
                     <div class="attendance-summary">
-                        <div><strong>96<span>%</span></strong><span class="summary-label">attendance rate</span></div>
-                        <div class="attendance-legend"><span><i class="legend-present"></i>Present</span><span><i class="legend-late"></i>Late</span></div>
-                    </div>
-                    <div class="chart" role="img" aria-label="Attendance this week: Monday 100 percent, Tuesday 100 percent, Wednesday 85 percent, Thursday 100 percent, Friday 100 percent">
-                        <div class="chart-col"><div class="bar-wrap"><div class="bar bar-full"></div></div><span>Mon</span></div>
-                        <div class="chart-col"><div class="bar-wrap"><div class="bar bar-full"></div></div><span>Tue</span></div>
-                        <div class="chart-col"><div class="bar-wrap"><div class="bar bar-late"></div></div><span>Wed</span></div>
-                        <div class="chart-col"><div class="bar-wrap"><div class="bar bar-full"></div></div><span>Thu</span></div>
-                        <div class="chart-col"><div class="bar-wrap"><div class="bar bar-today"></div></div><span>Fri</span></div>
+                        <div><strong id="attendance-total-summary">0</strong><span class="summary-label">activities attended</span></div>
+                        <p class="panel-subtitle">A club leader records attendance after each activity. Your points and badges update when it is recorded.</p>
                     </div>
                     <div class="checkin-strip">
                         <div class="checkin-symbol">✓</div>
-                        <div><strong id="checkin-title">Start your day strong</strong><span id="checkin-copy">Check in to keep your attendance streak going.</span></div>
-                        <button class="checkin-button" id="checkin-button" type="button">Check in <span>→</span></button>
+                        <div><strong>Ready for your next activity?</strong><span>Browse events and register. Attendance is recorded by your club leader.</span></div>
+                        <a class="checkin-button" href="activities.html">View activities <span>→</span></a>
                     </div>
                 </article>
                 <article class="panel rewards-panel">
                     <div class="panel-heading"><div><p class="section-kicker">POINTS & BADGES</p><h2>Your rewards</h2></div></div>
                     <div class="reward-progress">
-                        <div class="reward-copy"><span>Next badge</span><strong>Early Bird</strong><span>2 more on-time mornings to go</span></div>
-                        <div class="progress-ring" aria-label="Progress: 5 out of 7 mornings"><div><strong>5</strong><span>/ 7</span></div></div>
+                        <div class="reward-copy"><span>Next badge</span><strong id="next-badge-title">Participation</strong><span id="next-badge-copy">Attend activities to earn points and badges.</span></div>
+                        <div class="progress-ring" id="reward-progress" aria-label="No badge progress yet"><div><strong id="progress-count">0</strong><span id="progress-total">/ 10</span></div></div>
                     </div>
-                    <div class="badges-row" aria-label="Recently earned badges">
-                        <div class="badge-item"><span class="badge-icon badge-sun">☀</span><span>Bright start</span></div>
-                        <div class="badge-item"><span class="badge-icon badge-star">★</span><span>Team player</span></div>
-                        <div class="badge-item"><span class="badge-icon badge-heart">♥</span><span>Good energy</span></div>
-                        <button class="badge-item locked-badge" type="button" title="Keep earning points to unlock"><span class="badge-icon">?</span><span>Locked</span></button>
-                    </div>
+                    <div class="badges-row" id="badges-row" aria-label="Earned badges"><p class="empty-state">Loading badges…</p></div>
                 </article>
             </section>
             <footer class="page-footer"><span>Student activities portal.</span><span>Northstar Academy · Student life</span></footer>

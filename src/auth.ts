@@ -9,6 +9,7 @@ export const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 type AuthenticatedUser = {
   id: string;
   role: UserRole;
+  emailVerified: boolean;
   sessionId?: string;
   csrfToken?: string;
 };
@@ -91,7 +92,7 @@ export function requireAuth(prisma: PrismaClient): RequestHandler {
 
       const session = await prisma.session.findUnique({
         where: { tokenHash: hashSessionToken(token) },
-        include: { user: { select: { id: true, role: true, isActive: true } } },
+        include: { user: { select: { id: true, role: true, isActive: true, emailVerified: true } } },
       });
       if (!session || session.expiresAt <= new Date()) {
         if (session) await prisma.session.deleteMany({ where: { id: session.id } });
@@ -107,6 +108,7 @@ export function requireAuth(prisma: PrismaClient): RequestHandler {
       req.user = {
         id: session.user.id,
         role: session.user.role,
+        emailVerified: session.user.emailVerified,
         sessionId: session.id,
         csrfToken: session.csrfToken,
       };
@@ -131,6 +133,10 @@ export function requirePermission(permission: AppPermission): RequestHandler {
   return (req, _res, next) => {
     if (!req.user || !rolePermissions[req.user.role].includes(permission)) {
       next(new HttpError(403, "You do not have permission to access this resource."));
+      return;
+    }
+    if (permission === "community:read" && !req.user.emailVerified) {
+      next(new HttpError(403, "A verified Google account is required to access the student community."));
       return;
     }
     next();

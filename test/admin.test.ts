@@ -34,7 +34,7 @@ const prisma = {
       id: "session-1",
       csrfToken,
       expiresAt: new Date(Date.now() + 60_000),
-      user: { id: "admin-1", role: sessionRole, isActive: true },
+      user: { id: "admin-1", role: sessionRole, isActive: true, emailVerified: true },
     })),
     deleteMany: vi.fn(),
   },
@@ -111,7 +111,7 @@ describe("administrator overview", () => {
     expect(payload.pagination).toEqual({ page: 2, limit: 1, total: 1, pages: 1 });
     expect(prisma.session.findUnique).toHaveBeenCalledWith({
       where: { tokenHash: hashSessionToken(sessionToken) },
-      include: { user: { select: { id: true, role: true, isActive: true } } },
+      include: { user: { select: { id: true, role: true, isActive: true, emailVerified: true } } },
     });
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
       skip: 1,

@@ -52,6 +52,23 @@ enum QuizStatus {
   CANCELLED
 }
 
+enum CommunityRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum CommunityGameKey {
+  CHESS
+  QUIZ
+  WORDS
+}
+
+enum CommunityMeetupKey {
+  CHESS
+  ART
+}
+
 model User {
   id            String       @id @default(cuid())
   name          String       @db.VarChar(120)
@@ -71,6 +88,13 @@ model User {
   quizParticipations QuizParticipant[]
   hostedQuizzes Quiz[]       @relation("QuizHost")
   ledClubs      Club[]       @relation("ClubLeader")
+  communityVisible Boolean  @default(false)
+  communityInterests String[] @default([])
+  sentConnections CommunityConnection[] @relation("ConnectionRequester")
+  receivedConnections CommunityConnection[] @relation("ConnectionRecipient")
+  sentGameInvites CommunityGameInvite[] @relation("GameInviteSender")
+  receivedGameInvites CommunityGameInvite[] @relation("GameInviteRecipient")
+  meetupInterests CommunityMeetupInterest[]
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 }
@@ -260,6 +284,46 @@ model Attendance {
   @@unique([userId, activityId])
 }
 
+model CommunityConnection {
+  id          String                 @id @default(cuid())
+  requesterId String
+  recipientId String
+  status      CommunityRequestStatus @default(PENDING)
+  requester   User                   @relation("ConnectionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  recipient   User                   @relation("ConnectionRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@unique([requesterId, recipientId])
+  @@index([recipientId, status])
+}
+
+model CommunityGameInvite {
+  id          String                 @id @default(cuid())
+  senderId    String
+  recipientId String
+  game        CommunityGameKey
+  status      CommunityRequestStatus @default(PENDING)
+  sender      User                   @relation("GameInviteSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient   User                   @relation("GameInviteRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@index([senderId, recipientId, status])
+  @@index([recipientId, status])
+}
+
+model CommunityMeetupInterest {
+  id        String             @id @default(cuid())
+  userId    String
+  meetup    CommunityMeetupKey
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime           @default(now())
+
+  @@unique([userId, meetup])
+  @@index([meetup])
+}
+
 model UserBadge {
   id        String   @id @default(cuid())
   userId    String
@@ -276,7 +340,7 @@ model Payment {
   membershipId             String?
   activityRegistrationId   String?
   type                     PaymentType
-  status                   PaymentStatus @default(PENDING)
+  status                  PaymentStatus @default(PENDING)
   amountCents              Int
   currency                 String        @default("usd") @db.VarChar(3)
   stripeCheckoutSessionId  String?       @unique

@@ -105,6 +105,26 @@ describe("API security and health", () => {
     expect(styles.status).toBe(200);
   });
 
+  it("serves the connected student community and dynamic activity assets", async () => {
+    const [community, communityScript, clubsScript, activities, rewards] = await Promise.all([
+      fetch(`${baseUrl}/community.html`),
+      fetch(`${baseUrl}/community.js`),
+      fetch(`${baseUrl}/script.js`),
+      fetch(`${baseUrl}/activities.html`),
+      fetch(`${baseUrl}/rewards.html`),
+    ]);
+    expect(community.status).toBe(200);
+    expect(await community.text()).toContain('id="community-profile-form"');
+    expect(communityScript.status).toBe(200);
+    expect(await communityScript.text()).toContain("/community/game-invites");
+    expect(clubsScript.status).toBe(200);
+    expect(await clubsScript.text()).toContain("clubSearch");
+    expect(activities.status).toBe(200);
+    expect(await activities.text()).toContain('id="upcoming-list"');
+    expect(rewards.status).toBe(200);
+    expect(await rewards.text()).toContain("Attendance is recorded by your club leader");
+  });
+
   it("serves the landing, dashboard, sign-in pages, and frontend assets", async () => {
     const [landing, dashboard, login, register, authScript, font] = await Promise.all([
       fetch(`${baseUrl}/`),
