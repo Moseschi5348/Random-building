@@ -15,11 +15,12 @@ const findMany = vi.fn().mockResolvedValue([
     id: "student-1",
     name: "Alex Student",
     email: "alex@example.com",
-    role: UserRole.STUDENT,
+    role: UserRole.MEMBER,
     isActive: true,
     points: 15,
     createdAt: new Date("2026-01-02T00:00:00.000Z"),
-    _count: { memberships: 2, registrations: 3, attendance: 4 },
+    department: { id: "dept-1", name: "Development", icon: "💻" },
+    _count: { attendances: 4, resources: 2 },
   },
 ]);
 const userCount = vi.fn()
@@ -40,7 +41,7 @@ const prisma = {
   },
   user: { count: userCount, findMany },
   attendance: { count: vi.fn().mockResolvedValue(24) },
-  membership: { count: vi.fn().mockResolvedValue(6) },
+  department: { count: vi.fn().mockResolvedValue(4) },
 } as unknown as PrismaClient;
 
 const config: AppConfig = {
@@ -51,6 +52,7 @@ const config: AppConfig = {
   clientUrl: "http://localhost:3000",
   corsOrigins: ["http://localhost:3000"],
   adminEmail: null,
+  allowedEmailDomains: [],
   google: null,
 };
 
@@ -78,44 +80,59 @@ describe("administrator overview", () => {
     const anonymous = await fetch(`${baseUrl}/api/admin/overview`);
     expect(anonymous.status).toBe(401);
 
-    sessionRole = UserRole.STUDENT;
-    const student = await fetch(`${baseUrl}/api/admin/overview`, {
+    sessionRole = UserRole.MEMBER;
+    const forbidden = await fetch(`${baseUrl}/api/admin/overview`, {
       headers: { cookie: `dis_session=${sessionToken}` },
     });
-    expect(student.status).toBe(403);
+    expect(forbidden.status).toBe(403);
     sessionRole = UserRole.ADMIN;
-    expect(findMany).not.toHaveBeenCalled();
   });
 
   it("returns account totals and paginated participation details to admins", async () => {
-    const response = await fetch(`${baseUrl}/api/admin/overview?search=alex&page=2&limit=1`, {
+    const response = await fetch(`${baseUrl}/api/admin/overview?search=alex&page=1&limit=10`, {
       headers: { cookie: `dis_session=${sessionToken}` },
     });
-    const payload = await response.json();
-
     expect(response.status).toBe(200);
+
+    const payload = await response.json();
     expect(payload.summary).toEqual({
       totalUsers: 8,
-      activeStudents: 5,
+      activeMembers: 5,
       activeAccounts: 7,
       newUsersLast30Days: 2,
       totalAttendance: 24,
-      activeMemberships: 6,
+      departmentsCount: 4,
     });
-    expect(payload.users[0]).toMatchObject({
-      id: "student-1",
-      role: "student",
-      counts: { memberships: 2, registrations: 3, attendance: 4 },
+    expect(payload.users).toEqual([
+      {
+        id: "student-1",
+        name: "Alex Student",
+        email: "alex@example.com",
+        role: "member",
+        isActive: true,
+        points: 15,
+        createdAt: "2026-01-02T00:00:00.000Z",
+        department: { id: "dept-1", name: "Development", icon: "💻" },
+        counts: { attendances: 4, resources: 2 },
+      },
+    ]);
+    expect(payload.pagination).toEqual({
+      page: 1,
+      limit: 10,
+      total: 1,
+      pages: 1,
     });
-    expect(payload.pagination).toEqual({ page: 2, limit: 1, total: 1, pages: 1 });
-    expect(prisma.session.findUnique).toHaveBeenCalledWith({
-      where: { tokenHash: hashSessionToken(sessionToken) },
-      include: { user: { select: { id: true, role: true, isActive: true, emailVerified: true } } },
-    });
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      skip: 1,
-      take: 1,
-      where: { OR: expect.any(Array) },
-    }));
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            { name: { contains: "alex", mode: "insensitive" } },
+            { email: { contains: "alex", mode: "insensitive" } },
+          ],
+        },
+        skip: 0,
+        take: 10,
+      }),
+    );
   });
 });

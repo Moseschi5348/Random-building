@@ -12,6 +12,7 @@ const config: AppConfig = {
   clientUrl: "http://localhost:5173",
   corsOrigins: ["http://localhost:5173"],
   adminEmail: null,
+  allowedEmailDomains: [],
   google: null,
 };
 const prisma = new PrismaClient({ datasources: { db: { url: config.databaseUrl } } });

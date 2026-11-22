@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f7f6eb">
+    <meta name="description" content="Trivia Games: Compete, test your knowledge, and earn daily club points.">
+    <title>Trivia Games | Club Portal</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="pages.css">
+    <script src="auth.js" defer></script>
+    <script src="theme.js" defer></script>
+    <style>
+        .quiz-container { max-width: 760px; margin: 0 auto; }
+        .quiz-card { background: #fff; border: 1px solid #eeeff4; border-radius: 16px; padding: 32px; box-shadow: 0 4px 18px rgba(0,0,0,0.03); margin-top: 20px; }
+        .quiz-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f0f0f5; padding-bottom: 18px; margin-bottom: 24px; }
+        .timer-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; background: #fff2ed; color: #d95328; font-weight: 700; font-size: 13px; }
+        .cap-banner { display: flex; align-items: center; justify-content: space-between; background: #f4f2ff; border-radius: 10px; padding: 12px 18px; margin-bottom: 24px; font-size: 12px; color: #5345b5; font-weight: 600; }
+        .question-block { margin-bottom: 28px; padding-bottom: 24px; border-bottom: 1px dashed #eeeff4; }
+        .question-prompt { font-size: 15px; font-weight: 700; margin-bottom: 14px; color: #222; }
+        .options-grid { display: grid; gap: 10px; }
+        .option-label { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid #e2e2ec; border-radius: 10px; cursor: pointer; transition: all .2s; font-size: 13px; }
+        .option-label:hover { border-color: #7164df; background: #faf9ff; }
+        .option-label input[type="radio"] { width: 16px; height: 16px; accent-color: #7164df; }
+        .option-label.selected { border-color: #7164df; background: #f4f2ff; font-weight: 600; color: #4b3ec2; }
+        .submit-btn { width: 100%; padding: 14px; border-radius: 10px; background: #7164df; color: #fff; border: none; font-size: 14px; font-weight: 700; cursor: pointer; transition: all .2s; }
+        .submit-btn:hover { background: #5d4ec9; }
+        .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .result-box { text-align: center; padding: 30px 20px; }
+        .result-score { font-size: 42px; font-weight: 800; color: #7164df; margin: 10px 0; }
+        .result-feedback { font-size: 14px; color: #555; margin-bottom: 24px; line-height: 1.6; }
+    </style>
+</head>
+<body data-protected-page>
+    <div class="app-shell">
+        <aside class="sidebar" aria-label="Main navigation">
+            <a class="brand" href="home.html" aria-label="Club Portal home">
+                <span class="brand-mark">C</span>
+                <span class="brand-copy">club<span>PORTAL</span></span>
+            </a>
+            <div class="nav-label">MENU</div>
+            <nav class="main-nav">
+                <a class="nav-link" href="home.html"><span class="nav-icon">⌂</span>Overview</a>
+                <a class="nav-link" href="clubs.html"><span class="nav-icon">◈</span>Departments</a>
+                <a class="nav-link" href="activities.html"><span class="nav-icon">▤</span>Meetings</a>
+                <a class="nav-link" href="leaderboard.html"><span class="nav-icon">★</span>Leaderboard</a>
+                <a class="nav-link" href="rewards.html"><span class="nav-icon">✳</span>Rewards</a>
+                <a class="nav-link active" href="games.html" aria-current="page"><span class="nav-icon">⚙</span>Trivia Games</a>
+                <a class="nav-link" href="admin.html" data-admin-link hidden><span class="nav-icon">▦</span>Admin</a>
+            </nav>
+            <div class="sidebar-card">
+                <span class="sidebar-sparkle">✦</span>
+                <p class="sidebar-card-title">Daily Quiz Cap</p>
+                <p>Earn up to 20 bonus points per day from trivia questions to climb the leaderboard!</p>
+            </div>
+            <div class="sidebar-profile">
+                <div class="avatar avatar-small" data-user-initials>?</div>
+                <div><strong data-user-name>Member</strong><span data-user-role>Member</span></div>
+                <button class="sign-out-button" id="sign-out" type="button">Sign out</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div class="breadcrumb">Club portal <span>/</span> <strong>Trivia Games</strong></div>
+                <div class="topbar-actions">
+                    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme" aria-pressed="false"><span class="theme-icon">☾</span><span class="theme-label">Dark</span></button>
+                    <div class="avatar avatar-top" data-user-initials>ME</div>
+                </div>
+            </header>
+
+            <div class="quiz-container">
+                <section class="welcome-section" style="padding-bottom: 0;">
+                    <div>
+                        <p class="eyebrow"><span class="live-dot"></span> DAILY CHALLENGE</p>
+                        <h1 id="quiz-title">Club Trivia</h1>
+                        <p class="welcome-copy" id="quiz-desc">Test your knowledge across Design, Dev, Security, and Media!</p>
+                    </div>
+                </section>
+
+                <div class="cap-banner" id="cap-banner">
+                    <span>⚡ Daily Game Cap: Max 20 points/day</span>
+                    <span id="cap-remaining">Checking remaining cap...</span>
+                </div>
+
+                <div class="quiz-card" id="quiz-card">
+                    <div id="start-state" style="text-align: center; padding: 20px;">
+                        <p style="font-size: 14px; color: #555; margin-bottom: 24px;">
+                            Answer the timed trivia questions. Questions are timed server-side and points count towards your rank and your department's standings.
+                        </p>
+                        <button class="submit-btn" id="start-btn" style="max-width: 240px; margin: 0 auto;">Start Quiz 🚀</button>
+                    </div>
+
+                    <div id="quiz-active-state" hidden>
+                        <div class="quiz-header">
+                            <span style="font-size: 13px; font-weight: 700; color: #666;" id="question-progress">Questions</span>
+                            <div class="timer-badge">⏱ <span id="timer-text">02:00</span></div>
+                        </div>
+
+                        <form id="quiz-form">
+                            <div id="questions-list">
+                                <!-- Populated dynamically -->
+                            </div>
+                            <button type="submit" class="submit-btn" id="submit-quiz-btn">Submit Answers ✓</button>
+                        </form>
+                    </div>
+
+                    <div id="result-state" hidden class="result-box">
+                        <div style="font-size: 40px;">🎉</div>
+                        <h2>Quiz Finished!</h2>
+                        <div class="result-score" id="result-points">+0 pts</div>
+                        <p class="result-feedback" id="result-feedback"></p>
+                        <div style="display: flex; gap: 12px; justify-content: center;">
+                            <a href="leaderboard.html" class="button button-primary">View Leaderboard ★</a>
+                            <a href="home.html" class="button" style="background:#e0e0e8; color:#333;">Back to Dashboard</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <footer class="page-footer" style="margin-top: 40px;">
+                <span>Club Trivia Game Engine</span>
+                <span>Scored server-side with anti-cheat protection</span>
+            </footer>
+        </main>
+    </div>
+
+    <div class="session-guard" id="session-guard" role="status">
+        <section>
+            <div class="session-guard-mark">C</div>
+            <h1>Checking your session</h1>
+            <p id="session-message">Please wait while we verify your account.</p>
+            <a id="session-link" href="login.html">Return to sign in</a>
+        </section>
+    </div>
+
+    <script>
+        let currentQuiz = null;
+        let countdownTimer = null;
+        let secondsRemaining = 120;
+
+        async function loadQuizInfo() {
+            try {
+                const res = await fetch("/api/games/quiz", { credentials: "include" });
+                if (!res.ok) {
+                    document.querySelector("#quiz-card").innerHTML = `<p style="text-align:center; padding:30px; color:#888;">No active trivia challenge right now. Check back soon!</p>`;
+                    return;
+                }
+                currentQuiz = await res.json();
+                document.querySelector("#quiz-title").textContent = currentQuiz.title;
+                if (currentQuiz.description) {
+                    document.querySelector("#quiz-desc").textContent = currentQuiz.description;
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        document.querySelector("#start-btn")?.addEventListener("click", async () => {
+            if (!currentQuiz) return;
+            const startBtn = document.querySelector("#start-btn");
+            startBtn.disabled = true;
+
+            try {
+                const res = await fetch("/api/games/quiz/start", {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRF-Token": window.clubCsrfToken || window.northstarCsrfToken || ""
+                    },
+                    body: JSON.stringify({ quizId: currentQuiz.id })
+                });
+                const startData = await res.json();
+                document.querySelector("#cap-remaining").textContent = `${startData.pointsRemainingToday} pts available today`;
+
+                // Render questions
+                const container = document.querySelector("#questions-list");
+                container.innerHTML = "";
+
+                currentQuiz.questions.forEach((q, idx) => {
+                    const block = document.createElement("div");
+                    block.className = "question-block";
+                    block.innerHTML = `
+                        <div class="question-prompt">${idx + 1}. ${escapeHtml(q.prompt)}</div>
+                        <div class="options-grid">
+                            ${q.options.map(opt => `
+                                <label class="option-label">
+                                    <input type="radio" name="question_${q.id}" value="${opt.id}" required>
+                                    <span>${escapeHtml(opt.text)}</span>
+                                </label>
+                            `).join("")}
+                        </div>
+                    `;
+                    container.appendChild(block);
+                });
+
+                // Style radio select
+                container.addEventListener("change", (e) => {
+                    if (e.target.type === "radio") {
+                        const name = e.target.name;
+                        container.querySelectorAll(`input[name="${name}"]`).forEach((r) => {
+                            r.closest(".option-label")?.classList.toggle("selected", r.checked);
+                        });
+                    }
+                });
+
+                document.querySelector("#start-state").hidden = true;
+                document.querySelector("#quiz-active-state").hidden = false;
+
+                // Start timer
+                const totalSeconds = currentQuiz.questions.reduce((sum, q) => sum + (q.timeLimitSeconds || 30), 0);
+                startTimer(totalSeconds);
+            } catch (e) {
+                alert("Could not start quiz: " + e.message);
+                startBtn.disabled = false;
+            }
+        });
+
+        function startTimer(totalSeconds) {
+            secondsRemaining = totalSeconds;
+            updateTimerDisplay();
+            countdownTimer = setInterval(() => {
+                secondsRemaining--;
+                updateTimerDisplay();
+                if (secondsRemaining <= 0) {
+                    clearInterval(countdownTimer);
+                    alert("Time is up! Submitting your answers now.");
+                    submitQuizAnswers();
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const mins = Math.floor(secondsRemaining / 60);
+            const secs = secondsRemaining % 60;
+            document.querySelector("#timer-text").textContent =
+                `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+        }
+
+        document.querySelector("#quiz-form")?.addEventListener("submit", (e) => {
+            e.preventDefault();
+            clearInterval(countdownTimer);
+            submitQuizAnswers();
+        });
+
+        async function submitQuizAnswers() {
+            const submitBtn = document.querySelector("#submit-quiz-btn");
+            submitBtn.disabled = true;
+            submitBtn.textContent = "Submitting answers...";
+
+            const answers = [];
+            currentQuiz.questions.forEach((q) => {
+                const checked = document.querySelector(`input[name="question_${q.id}"]:checked`);
+                if (checked) {
+                    answers.push({ questionId: q.id, optionId: checked.value });
+                }
+            });
+
+            try {
+                const res = await fetch("/api/games/quiz/submit", {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRF-Token": window.clubCsrfToken || window.northstarCsrfToken || ""
+                    },
+                    body: JSON.stringify({ quizId: currentQuiz.id, answers })
+                });
+
+                const data = await res.json();
+                document.querySelector("#quiz-active-state").hidden = true;
+                document.querySelector("#result-state").hidden = false;
+
+                document.querySelector("#result-points").textContent = `+${data.pointsAwarded} pts`;
+                let feedback = `You answered <strong>${data.correctCount} of ${data.totalQuestions}</strong> questions correctly!`;
+                if (data.dailyCapReached) {
+                    feedback += `<br><span style="color:#d95328;">⚡ You reached your daily game point cap (20/20 pts). Come back tomorrow for more!</span>`;
+                }
+                if (data.badges && data.badges.includes("QUIZ_MASTER")) {
+                    feedback += `<br><span style="color:#7164df; font-weight:700;">★ UNLOCKED BADGE: QUIZ MASTER!</span>`;
+                }
+                document.querySelector("#result-feedback").innerHTML = feedback;
+            } catch (err) {
+                alert("Submission error: " + err.message);
+                submitBtn.disabled = false;
+            }
+        }
+
+        function escapeHtml(str) {
+            return String(str || "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+        }
+
+        window.addEventListener("club:session-ready", loadQuizInfo);
+        window.addEventListener("northstar:session-ready", loadQuizInfo);
+    </script>
+</body>
+</html>

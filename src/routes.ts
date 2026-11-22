@@ -5,10 +5,12 @@ import {
   CommunityGameKey,
   CommunityMeetupKey,
   CommunityRequestStatus,
-  MembershipStatus,
   NoticeLevel,
-  RegistrationStatus,
+  PointSourceType,
+  QuizStatus,
+  ResourceCategory,
   UserRole,
+  type Prisma,
   type PrismaClient,
 } from "@prisma/client";
 import {
@@ -25,24 +27,33 @@ import type { AppConfig } from "./config";
 import { HttpError, parseBody } from "./http";
 import { z } from "zod";
 
-const clubSchema = z.object({
+const departmentSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().min(1).max(2000),
-  membershipFeeCents: z.number().int().min(0).max(1_000_000),
-  leaderId: z.string().min(1),
+  icon: z.string().trim().max(16).default("◈"),
+  headId: z.string().min(1).optional().nullable(),
 });
 
-const activitySchema = z.object({
+const meetingSchema = z.object({
   title: z.string().trim().min(1).max(160),
   description: z.string().trim().min(1).max(2000),
   startsAt: z.string().datetime().transform((value) => new Date(value)),
-  registrationFeeCents: z.number().int().min(0).max(1_000_000),
+  endsAt: z.string().datetime().transform((value) => new Date(value)),
+  departmentId: z.string().min(1).optional().nullable(),
 });
 
-const attendanceSchema = z.object({
+const meetingCodeCheckinSchema = z.object({
+  code: z.string().trim().min(4).max(12),
+});
+
+const manualAttendanceSchema = z.object({
   userId: z.string().min(1),
-  punctual: z.boolean().default(false),
-  goodConduct: z.boolean().default(false),
+});
+
+const resourceSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  url: z.string().trim().url().max(2000),
+  category: z.nativeEnum(ResourceCategory).default(ResourceCategory.OTHER),
 });
 
 const noticeSchema = z.object({
@@ -52,34 +63,53 @@ const noticeSchema = z.object({
   endsAt: z.string().datetime().transform((value) => new Date(value)).optional(),
 });
 
-const communityProfileSchema = z.object({
-  visible: z.boolean(),
-  interests: z.array(z.enum(["games", "study", "creative"])).max(3)
-    .refine((interests) => new Set(interests).size === interests.length),
-});
-
-const communityRequestStatusSchema = z.object({
-  status: z.enum(["ACCEPTED", "DECLINED"]),
-});
-
-const communityGameInviteSchema = z.object({
-  recipientId: z.string().min(1),
-  game: z.nativeEnum(CommunityGameKey),
-});
-
-const communityMeetupInterestSchema = z.object({
-  interested: z.boolean(),
-});
-
 const adminUsersQuerySchema = z.object({
   search: z.string().trim().max(100).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
 
+const quizSubmitSchema = z.object({
+  quizId: z.string().min(1),
+  answers: z.array(
+    z.object({
+      questionId: z.string().min(1),
+      optionId: z.string().min(1),
+    }),
+  ),
+});
+
 const GOOGLE_STATE_COOKIE = "dis_google_state";
 const GOOGLE_NONCE_COOKIE = "dis_google_nonce";
 const GOOGLE_AUTH_COOKIE_TTL_SECONDS = 600;
+
+// Rate limiting in-memory map for meeting code attempts: key = `${userId}:${meetingId}` -> { count, expiresAt }
+const checkinAttempts = new Map<string, { count: number; expiresAt: number }>();
+
+function assertCheckinRateLimit(userId: string, meetingId: string): void {
+  const key = `${userId}:${meetingId}`;
+  const now = Date.now();
+  const record = checkinAttempts.get(key);
+  if (record && record.expiresAt > now) {
+    if (record.count >= 5) {
+      throw new HttpError(429, "Too many failed code attempts. Please wait 10 minutes before trying again.");
+    }
+  } else {
+    checkinAttempts.set(key, { count: 0, expiresAt: now + 10 * 60 * 1000 });
+  }
+}
+
+function recordFailedCheckinAttempt(userId: string, meetingId: string): void {
+  const key = `${userId}:${meetingId}`;
+  const record = checkinAttempts.get(key);
+  if (record) {
+    record.count += 1;
+  }
+}
+
+function clearCheckinAttempts(userId: string, meetingId: string): void {
+  checkinAttempts.delete(`${userId}:${meetingId}`);
+}
 
 function safeEqual(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left);
@@ -143,28 +173,67 @@ async function createLoginSession(
   setSessionCookie(res, credentials.token, secureCookie);
 }
 
-async function assertClubManager(
-  prisma: PrismaClient,
-  clubId: string | null,
+export async function awardPoints(
+  tx: Prisma.TransactionClient,
   userId: string,
-  role: UserRole,
-): Promise<void> {
-  if (role === UserRole.ADMIN) {
-    return;
-  }
-  if (!clubId) {
-    throw new HttpError(403, "Only administrators can manage all-club activities.");
-  }
-  const club = await prisma.club.findUnique({
-    where: { id: clubId },
-    select: { leaderId: true },
+  amount: number,
+  reason: string,
+  sourceType: PointSourceType,
+  sourceId?: string,
+): Promise<number> {
+  if (amount <= 0) return 0;
+  await tx.pointTransaction.create({
+    data: {
+      userId,
+      amount,
+      reason,
+      sourceType,
+      sourceId,
+    },
   });
-  if (!club) {
-    throw new HttpError(404, "Club not found.");
+  await tx.user.update({
+    where: { id: userId },
+    data: { points: { increment: amount } },
+  });
+  return amount;
+}
+
+export async function evaluateBadges(
+  tx: Prisma.TransactionClient,
+  userId: string,
+): Promise<string[]> {
+  const [attendanceCount, punctualCount, user, resources] = await Promise.all([
+    tx.attendance.count({ where: { userId } }),
+    tx.attendance.count({ where: { userId, punctual: true } }),
+    tx.user.findUnique({ where: { id: userId }, select: { points: true } }),
+    tx.resource.findMany({ where: { userId }, select: { createdAt: true } }),
+  ]);
+
+  const earnedBadges: string[] = [];
+  if (attendanceCount >= 1) earnedBadges.push("FIRST_STEP");
+  if (attendanceCount >= 5) earnedBadges.push("REGULAR");
+  if (attendanceCount >= 10) earnedBadges.push("COMMITTED");
+  if (punctualCount >= 5) earnedBadges.push("EARLY_BIRD");
+
+  const points = user?.points ?? 0;
+  if (points >= 100) earnedBadges.push("CENTURY_CLUB");
+  if (points >= 250) earnedBadges.push("ACHIEVER");
+  if (points >= 500) earnedBadges.push("CLUB_LEGEND");
+
+  // CONTRIBUTOR: shared resources across >= 3 distinct calendar days
+  const distinctDays = new Set(resources.map((r) => r.createdAt.toISOString().slice(0, 10)));
+  if (distinctDays.size >= 3) {
+    earnedBadges.push("CONTRIBUTOR");
   }
-  if (club.leaderId !== userId) {
-    throw new HttpError(403, "Only this club's leader can manage its activities.");
+
+  if (earnedBadges.length > 0) {
+    await tx.userBadge.createMany({
+      data: earnedBadges.map((key) => ({ userId, key })),
+      skipDuplicates: true,
+    });
   }
+
+  return earnedBadges;
 }
 
 export function createApiRouter(
@@ -180,6 +249,10 @@ export function createApiRouter(
         config.google.callbackUrl,
       )
     : null;
+
+  // ---------------------------------------------------------
+  // AUTH
+  // ---------------------------------------------------------
 
   router.get("/auth/google", (_req, res) => {
     if (!googleOAuth) {
@@ -267,6 +340,15 @@ export function createApiRouter(
       return;
     }
 
+    // Optional email domain restriction
+    if (config.allowedEmailDomains.length > 0) {
+      const domain = email.split("@")[1];
+      if (!config.allowedEmailDomains.includes(domain)) {
+        res.redirect(302, loginPageUrl(config.clientUrl, "domain_restricted"));
+        return;
+      }
+    }
+
     const userSelect = {
       id: true,
       name: true,
@@ -325,6 +407,7 @@ export function createApiRouter(
             googleId: payload.sub,
             name: (payload.name || email.split("@")[0]).slice(0, 120),
             emailVerified: true,
+            role: UserRole.MEMBER,
           },
           select: userSelect,
         });
@@ -358,7 +441,15 @@ export function createApiRouter(
   router.get("/auth/session", auth, requirePermission("student-life:read"), async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id: currentUserId(req) },
-      select: { id: true, name: true, role: true, isActive: true, emailVerified: true },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        isActive: true,
+        emailVerified: true,
+        department: { select: { id: true, name: true, icon: true } },
+        headedDepartment: { select: { id: true, name: true } },
+      },
     });
     if (!user || !user.isActive) {
       throw new HttpError(401, "The account is unavailable.");
@@ -370,6 +461,8 @@ export function createApiRouter(
         role: user.role.toLowerCase().replaceAll("_", "-"),
         permissions: permissionsForRole(user.role),
         emailVerified: user.emailVerified,
+        department: user.department,
+        headedDepartment: user.headedDepartment,
       },
       csrfToken: req.user?.csrfToken ?? null,
     });
@@ -381,6 +474,1050 @@ export function createApiRouter(
     }
     clearSessionCookie(res, config.nodeEnv === "production");
     res.status(204).send();
+  });
+
+  // ---------------------------------------------------------
+  // USER PROFILE
+  // ---------------------------------------------------------
+
+  router.get("/me", auth, requirePermission("student-life:read"), async (req, res) => {
+    const user = await prisma.user.findUnique({
+      where: { id: currentUserId(req) },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        points: true,
+        department: { select: { id: true, name: true, icon: true } },
+        headedDepartment: { select: { id: true, name: true } },
+        badges: { select: { key: true, awardedAt: true }, orderBy: { awardedAt: "desc" } },
+        attendances: {
+          select: {
+            punctual: true,
+            pointsAwarded: true,
+            checkedInAt: true,
+            meeting: {
+              select: {
+                id: true,
+                title: true,
+                startsAt: true,
+                department: { select: { id: true, name: true, icon: true } },
+              },
+            },
+          },
+          orderBy: { checkedInAt: "desc" },
+        },
+        transactions: {
+          select: { id: true, amount: true, reason: true, sourceType: true, createdAt: true },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+        },
+        _count: { select: { attendances: true, resources: true } },
+      },
+    });
+    if (!user) {
+      throw new HttpError(404, "User not found.");
+    }
+    res.json(user);
+  });
+
+  // ---------------------------------------------------------
+  // DEPARTMENTS
+  // ---------------------------------------------------------
+
+  router.get("/departments", async (_req, res) => {
+    const departments = await prisma.department.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        icon: true,
+        head: { select: { id: true, name: true, email: true } },
+        _count: { select: { members: true, meetings: true, resources: true } },
+      },
+    });
+    res.json(departments);
+  });
+
+  // Backward compatibility alias for clubs
+  router.get("/clubs", async (_req, res) => {
+    const departments = await prisma.department.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        icon: true,
+        head: { select: { id: true, name: true, email: true } },
+        _count: { select: { members: true, meetings: true, resources: true } },
+      },
+    });
+    res.json(departments.map((d) => ({ ...d, membershipFeeCents: 0, _count: { memberships: d._count.members } })));
+  });
+
+  router.post("/departments", auth, requireRole(UserRole.ADMIN), async (req, res) => {
+    const body = parseBody(departmentSchema, req.body);
+    const department = await prisma.$transaction(async (tx) => {
+      if (body.headId) {
+        const headCandidate = await tx.user.findUnique({ where: { id: body.headId } });
+        if (!headCandidate) throw new HttpError(404, "Selected department head was not found.");
+        if (headCandidate.role !== UserRole.ADMIN) {
+          await tx.user.update({
+            where: { id: headCandidate.id },
+            data: { role: UserRole.DEPARTMENT_HEAD },
+          });
+        }
+      }
+      return tx.department.create({
+        data: {
+          name: body.name,
+          description: body.description,
+          icon: body.icon || "◈",
+          headId: body.headId || null,
+        },
+        include: { head: { select: { id: true, name: true, email: true } } },
+      });
+    });
+    res.status(201).json(department);
+  });
+
+  router.patch("/departments/:departmentId", auth, requireRole(UserRole.ADMIN), async (req, res) => {
+    const departmentId = routeParam(req, "departmentId");
+    const body = parseBody(departmentSchema.partial(), req.body);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const existing = await tx.department.findUnique({ where: { id: departmentId } });
+      if (!existing) throw new HttpError(404, "Department not found.");
+
+      if (body.headId !== undefined && body.headId !== existing.headId) {
+        // Demote previous head if exists and not admin
+        if (existing.headId) {
+          const oldHead = await tx.user.findUnique({ where: { id: existing.headId } });
+          if (oldHead && oldHead.role === UserRole.DEPARTMENT_HEAD) {
+            await tx.user.update({
+              where: { id: existing.headId },
+              data: { role: UserRole.MEMBER },
+            });
+          }
+        }
+        // Promote new head
+        if (body.headId) {
+          const newHead = await tx.user.findUnique({ where: { id: body.headId } });
+          if (!newHead) throw new HttpError(404, "New department head not found.");
+          if (newHead.role !== UserRole.ADMIN) {
+            await tx.user.update({
+              where: { id: newHead.id },
+              data: { role: UserRole.DEPARTMENT_HEAD },
+            });
+          }
+        }
+      }
+
+      return tx.department.update({
+        where: { id: departmentId },
+        data: {
+          ...(body.name ? { name: body.name } : {}),
+          ...(body.description ? { description: body.description } : {}),
+          ...(body.icon ? { icon: body.icon } : {}),
+          ...(body.headId !== undefined ? { headId: body.headId } : {}),
+        },
+        include: { head: { select: { id: true, name: true, email: true } } },
+      });
+    });
+
+    res.json(updated);
+  });
+
+  // Member joins their one primary department
+  router.post("/departments/:departmentId/join", auth, async (req, res) => {
+    const userId = currentUserId(req);
+    const departmentId = routeParam(req, "departmentId");
+
+    const [user, department] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { departmentId: true } }),
+      prisma.department.findUnique({ where: { id: departmentId } }),
+    ]);
+
+    if (!department) throw new HttpError(404, "Department not found.");
+
+    if (user?.departmentId) {
+      if (user.departmentId === department.id) {
+        throw new HttpError(409, "You are already a member of this department.");
+      }
+      throw new HttpError(409, "You already belong to a department. Contact an administrator to change your department.");
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { departmentId: department.id },
+      select: {
+        id: true,
+        name: true,
+        department: { select: { id: true, name: true, icon: true } },
+      },
+    });
+
+    res.status(201).json({ message: `Joined ${department.name} successfully.`, user: updatedUser });
+  });
+
+  // Backward compatibility alias for join club
+  router.post("/clubs/:clubId/join", auth, async (req, res) => {
+    const userId = currentUserId(req);
+    const departmentId = routeParam(req, "clubId");
+    const [user, department] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { departmentId: true } }),
+      prisma.department.findUnique({ where: { id: departmentId } }),
+    ]);
+    if (!department) throw new HttpError(404, "Department not found.");
+    if (user?.departmentId) {
+      if (user.departmentId === department.id) {
+        throw new HttpError(409, "You are already a member of this department.");
+      }
+      throw new HttpError(409, "You already belong to a department. Contact an administrator to change your department.");
+    }
+    await prisma.user.update({
+      where: { id: userId },
+      data: { departmentId: department.id },
+    });
+    res.status(201).json({ membership: { status: "ACTIVE", clubId: department.id } });
+  });
+
+  // Admin moves a member to a different department
+  router.patch("/users/:userId/department", auth, requireRole(UserRole.ADMIN), async (req, res) => {
+    const targetUserId = routeParam(req, "userId");
+    const body = parseBody(z.object({ departmentId: z.string().min(1).nullable() }), req.body);
+
+    if (body.departmentId) {
+      const deptExists = await prisma.department.findUnique({ where: { id: body.departmentId } });
+      if (!deptExists) throw new HttpError(404, "Target department not found.");
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: targetUserId },
+      data: { departmentId: body.departmentId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        department: { select: { id: true, name: true, icon: true } },
+      },
+    });
+
+    res.json(updated);
+  });
+
+  // ---------------------------------------------------------
+  // MEETINGS & ATTENDANCE
+  // ---------------------------------------------------------
+
+  router.get("/meetings", async (req, res) => {
+    const departmentId = typeof req.query.departmentId === "string" ? req.query.departmentId : undefined;
+    const meetings = await prisma.meeting.findMany({
+      where: departmentId ? { departmentId } : {},
+      orderBy: { startsAt: "asc" },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        startsAt: true,
+        endsAt: true,
+        departmentId: true,
+        department: { select: { id: true, name: true, icon: true } },
+        createdBy: { select: { id: true, name: true } },
+        _count: { select: { attendances: true } },
+      },
+    });
+    res.json(meetings);
+  });
+
+  // Backward compatibility alias for activities
+  router.get("/activities", async (_req, res) => {
+    const meetings = await prisma.meeting.findMany({
+      where: { startsAt: { gt: new Date() } },
+      orderBy: { startsAt: "asc" },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        startsAt: true,
+        endsAt: true,
+        departmentId: true,
+        department: { select: { id: true, name: true } },
+        _count: { select: { attendances: true } },
+      },
+    });
+    res.json(meetings.map((m) => ({
+      ...m,
+      clubId: m.departmentId,
+      club: m.department,
+      registrationFeeCents: 0,
+    })));
+  });
+
+  router.post("/meetings", auth, async (req, res) => {
+    const userId = currentUserId(req);
+    const body = parseBody(meetingSchema, req.body);
+    const userRole = req.user?.role;
+
+    if (body.endsAt <= body.startsAt) {
+      throw new HttpError(400, "Meeting end time must be after the start time.");
+    }
+
+    // Permission check:
+    // Admin can create for any department or all-club (departmentId null).
+    // Department Head can only create for their own department.
+    if (userRole === UserRole.DEPARTMENT_HEAD) {
+      if (!body.departmentId) {
+        throw new HttpError(403, "Department heads cannot create all-club meetings. Only admins can.");
+      }
+      const headed = await prisma.department.findUnique({
+        where: { id: body.departmentId },
+        select: { headId: true },
+      });
+      if (headed?.headId !== userId) {
+        throw new HttpError(403, "You can only create meetings for your own department.");
+      }
+    } else if (userRole !== UserRole.ADMIN) {
+      throw new HttpError(403, "Only department heads or administrators can create meetings.");
+    }
+
+    const meeting = await prisma.meeting.create({
+      data: {
+        title: body.title,
+        description: body.description,
+        startsAt: body.startsAt,
+        endsAt: body.endsAt,
+        departmentId: body.departmentId || null,
+        createdById: userId,
+      },
+      include: {
+        department: { select: { id: true, name: true, icon: true } },
+      },
+    });
+
+    res.status(201).json(meeting);
+  });
+
+  // Generate / Activate a 6-digit attendance code for meeting
+  router.post("/meetings/:meetingId/code", auth, async (req, res) => {
+    const userId = currentUserId(req);
+    const meetingId = routeParam(req, "meetingId");
+    const userRole = req.user?.role;
+
+    const meeting = await prisma.meeting.findUnique({
+      where: { id: meetingId },
+      include: { department: { select: { headId: true } } },
+    });
+    if (!meeting) throw new HttpError(404, "Meeting not found.");
+
+    // Only host, department head, or admin can generate the code
+    const isAuthorized =
+      userRole === UserRole.ADMIN ||
+      meeting.createdById === userId ||
+      meeting.department?.headId === userId;
+    if (!isAuthorized) {
+      throw new HttpError(403, "You are not authorized to generate the attendance code for this meeting.");
+    }
+
+    // Generate 6-digit code, expires at meeting end time (or 60 mins from now if end time has passed)
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = meeting.endsAt > new Date() ? meeting.endsAt : new Date(Date.now() + 60 * 60 * 1000);
+
+    const updated = await prisma.meeting.update({
+      where: { id: meetingId },
+      data: {
+        attendanceCode: code,
+        codeExpiresAt: expiresAt,
+      },
+      select: {
+        id: true,
+        title: true,
+        attendanceCode: true,
+        codeExpiresAt: true,
+      },
+    });
+
+    res.status(200).json(updated);
+  });
+
+  // Member checks in using the 6-digit code
+  router.post("/meetings/:meetingId/checkin", auth, async (req, res) => {
+    const userId = currentUserId(req);
+    const meetingId = routeParam(req, "meetingId");
+    const body = parseBody(meetingCodeCheckinSchema, req.body);
+
+    assertCheckinRateLimit(userId, meetingId);
+
+    const meeting = await prisma.meeting.findUnique({
+      where: { id: meetingId },
+      include: { department: { select: { headId: true } } },
+    });
+    if (!meeting) throw new HttpError(404, "Meeting not found.");
+
+    // Security rule: host and department heads cannot award points to themselves
+    if (meeting.createdById === userId || meeting.department?.headId === userId) {
+      throw new HttpError(403, "Meeting hosts and department heads cannot check in or award points to themselves.");
+    }
+    if (req.user?.role === UserRole.ADMIN && meeting.createdById === userId) {
+      throw new HttpError(403, "You cannot record attendance or award points to yourself.");
+    }
+
+    const now = new Date();
+    // Validate meeting window: valid from startsAt to endsAt
+    if (now < meeting.startsAt || now > meeting.endsAt) {
+      throw new HttpError(400, "Meeting attendance code is only valid during the meeting window.");
+    }
+
+    // Validate code active and not expired
+    if (!meeting.attendanceCode || !meeting.codeExpiresAt || now > meeting.codeExpiresAt) {
+      throw new HttpError(400, "The attendance code is expired or not active.");
+    }
+
+    // Validate code match
+    if (meeting.attendanceCode.trim() !== body.code.trim()) {
+      recordFailedCheckinAttempt(userId, meetingId);
+      throw new HttpError(400, "Invalid attendance code.");
+    }
+
+    // Validate duplicate check-in
+    const priorAttendance = await prisma.attendance.findUnique({
+      where: { userId_meetingId: { userId, meetingId } },
+    });
+    if (priorAttendance) {
+      throw new HttpError(409, "You have already checked in for this meeting.");
+    }
+
+    clearCheckinAttempts(userId, meetingId);
+
+    // Punctual rule: entered within first 10 minutes of meeting start time
+    const isPunctual = now.getTime() <= meeting.startsAt.getTime() + 10 * 60 * 1000;
+    const pointsAwarded = isPunctual ? 15 : 10;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const attendance = await tx.attendance.create({
+        data: {
+          userId,
+          meetingId,
+          punctual: isPunctual,
+          pointsAwarded,
+        },
+      });
+
+      await awardPoints(
+        tx,
+        userId,
+        pointsAwarded,
+        `Attended meeting: ${meeting.title}${isPunctual ? " (Punctual bonus)" : ""}`,
+        PointSourceType.MEETING_ATTENDANCE,
+        meetingId,
+      );
+
+      const badges = await evaluateBadges(tx, userId);
+      return { attendance, badges };
+    });
+
+    res.status(201).json({
+      message: isPunctual ? "Checked in! Earned 15 points (Punctual)." : "Checked in! Earned 10 points.",
+      ...result,
+    });
+  });
+
+  // Manual fallback attendance marked by Department Head or Admin
+  router.post("/meetings/:meetingId/attendance", auth, async (req, res) => {
+    const actorId = currentUserId(req);
+    const meetingId = routeParam(req, "meetingId");
+    const body = parseBody(manualAttendanceSchema, req.body);
+    const userRole = req.user?.role;
+
+    if (body.userId === actorId) {
+      throw new HttpError(403, "You cannot record attendance or award points to yourself.");
+    }
+
+    const meeting = await prisma.meeting.findUnique({
+      where: { id: meetingId },
+      include: { department: { select: { headId: true } } },
+    });
+    if (!meeting) throw new HttpError(404, "Meeting not found.");
+
+    // Authorization check
+    if (userRole === UserRole.DEPARTMENT_HEAD) {
+      if (meeting.departmentId && meeting.department?.headId !== actorId && meeting.createdById !== actorId) {
+        throw new HttpError(403, "You can only manage attendance for your department meetings.");
+      }
+      if (!meeting.departmentId) {
+        throw new HttpError(403, "Only administrators can manage all-club activities.");
+      }
+    } else if (userRole !== UserRole.ADMIN && meeting.createdById !== actorId) {
+      throw new HttpError(403, "Only department heads or administrators can record attendance.");
+    }
+
+    const priorAttendance = await prisma.attendance.findUnique({
+      where: { userId_meetingId: { userId: body.userId, meetingId } },
+    });
+    if (priorAttendance) {
+      throw new HttpError(409, "Attendance has already been recorded for this user.");
+    }
+
+    // Manual fallback is marked non-punctual per requirements
+    const pointsAwarded = 10;
+    const result = await prisma.$transaction(async (tx) => {
+      const attendance = await tx.attendance.create({
+        data: {
+          userId: body.userId,
+          meetingId,
+          punctual: false,
+          pointsAwarded,
+        },
+      });
+
+      await awardPoints(
+        tx,
+        body.userId,
+        pointsAwarded,
+        `Manual check-in for meeting: ${meeting.title}`,
+        PointSourceType.MEETING_ATTENDANCE,
+        meetingId,
+      );
+
+      const badges = await evaluateBadges(tx, body.userId);
+      return { attendance, badges };
+    });
+
+    res.status(201).json({
+      message: "Attendance recorded successfully.",
+      ...result,
+    });
+  });
+
+  // Backward compatibility alias for activities/:activityId/attendance
+  router.post("/activities/:activityId/attendance", auth, async (req, res) => {
+    const actorId = currentUserId(req);
+    const meetingId = routeParam(req, "activityId");
+    const body = parseBody(z.object({ userId: z.string(), punctual: z.boolean().optional() }), req.body);
+    const userRole = req.user?.role;
+
+    if (body.userId === actorId) {
+      throw new HttpError(403, "You cannot record attendance or award points to yourself.");
+    }
+
+    const meeting = await prisma.meeting.findUnique({
+      where: { id: meetingId },
+      include: { department: { select: { headId: true } } },
+    });
+    if (!meeting) throw new HttpError(404, "Activity not found.");
+
+    if (userRole === UserRole.DEPARTMENT_HEAD) {
+      if (meeting.departmentId && meeting.department?.headId !== actorId && meeting.createdById !== actorId) {
+        throw new HttpError(403, "Only this club's leader can manage its activities.");
+      }
+      if (!meeting.departmentId) {
+        throw new HttpError(403, "Only administrators can manage all-club activities.");
+      }
+    } else if (userRole !== UserRole.ADMIN && meeting.createdById !== actorId) {
+      throw new HttpError(403, "Only administrators can manage all-club activities.");
+    }
+
+    const prior = await prisma.attendance.findUnique({
+      where: { userId_meetingId: { userId: body.userId, meetingId } },
+    });
+    if (prior) {
+      throw new HttpError(409, "Attendance has already been recorded for this user.");
+    }
+
+    const isPunctual = body.punctual === true;
+    const pointsAwarded = isPunctual ? 15 : 10;
+    const result = await prisma.$transaction(async (tx) => {
+      const attendance = await tx.attendance.create({
+        data: {
+          userId: body.userId,
+          meetingId,
+          punctual: isPunctual,
+          pointsAwarded,
+        },
+      });
+
+      await awardPoints(
+        tx,
+        body.userId,
+        pointsAwarded,
+        `Activity attendance: ${meeting.title}`,
+        PointSourceType.MEETING_ATTENDANCE,
+        meetingId,
+      );
+
+      const badges = await evaluateBadges(tx, body.userId);
+      return { attendance, badges };
+    });
+
+    res.status(201).json(result);
+  });
+
+  // ---------------------------------------------------------
+  // RESOURCES (PHASE 2)
+  // ---------------------------------------------------------
+
+  router.get("/departments/:departmentId/resources", async (req, res) => {
+    const departmentId = routeParam(req, "departmentId");
+    const resources = await prisma.resource.findMany({
+      where: { departmentId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        user: { select: { id: true, name: true, role: true } },
+      },
+    });
+    res.json(resources);
+  });
+
+  router.post("/departments/:departmentId/resources", auth, async (req, res) => {
+    const userId = currentUserId(req);
+    const departmentId = routeParam(req, "departmentId");
+    const body = parseBody(resourceSchema, req.body);
+    const userRole = req.user?.role;
+
+    const [user, department] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { departmentId: true } }),
+      prisma.department.findUnique({ where: { id: departmentId } }),
+    ]);
+
+    if (!department) throw new HttpError(404, "Department not found.");
+
+    // Must be member of department, head, or admin
+    const canPost =
+      userRole === UserRole.ADMIN ||
+      department.headId === userId ||
+      user?.departmentId === department.id;
+    if (!canPost) {
+      throw new HttpError(403, "You must join this department before sharing resources here.");
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const resource = await tx.resource.create({
+        data: {
+          title: body.title,
+          url: body.url,
+          category: body.category,
+          departmentId,
+          userId,
+        },
+        include: {
+          user: { select: { id: true, name: true, role: true } },
+        },
+      });
+
+      const badges = await evaluateBadges(tx, userId);
+      return { resource, badges };
+    });
+
+    res.status(201).json(result);
+  });
+
+  router.delete("/resources/:resourceId", auth, async (req, res) => {
+    const userId = currentUserId(req);
+    const resourceId = routeParam(req, "resourceId");
+    const userRole = req.user?.role;
+
+    const resource = await prisma.resource.findUnique({
+      where: { id: resourceId },
+      include: { department: { select: { headId: true } } },
+    });
+    if (!resource) throw new HttpError(404, "Resource not found.");
+
+    const canDelete =
+      userRole === UserRole.ADMIN ||
+      resource.userId === userId ||
+      resource.department.headId === userId;
+    if (!canDelete) {
+      throw new HttpError(403, "You are not authorized to delete this resource.");
+    }
+
+    await prisma.resource.delete({ where: { id: resourceId } });
+    res.status(204).send();
+  });
+
+  // ---------------------------------------------------------
+  // LEADERBOARD (PHASE 1)
+  // ---------------------------------------------------------
+
+  router.get("/leaderboard", auth, async (req, res) => {
+    const limitResult = z.coerce.number().int().min(1).max(100).safeParse(req.query.limit ?? 25);
+    if (!limitResult.success) {
+      throw new HttpError(400, "limit must be between 1 and 100.");
+    }
+    const departmentId = typeof req.query.departmentId === "string" ? req.query.departmentId : undefined;
+
+    const users = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        ...(departmentId ? { departmentId } : {}),
+      },
+      orderBy: [{ points: "desc" }, { name: "asc" }],
+      take: limitResult.data,
+      select: {
+        id: true,
+        name: true,
+        points: true,
+        role: true,
+        department: { select: { id: true, name: true, icon: true } },
+        _count: { select: { attendances: true, resources: true } },
+      },
+    });
+
+    res.json(users);
+  });
+
+  router.get("/leaderboard/departments", auth, async (_req, res) => {
+    const departments = await prisma.department.findMany({
+      select: {
+        id: true,
+        name: true,
+        icon: true,
+        members: {
+          where: { isActive: true },
+          select: { points: true },
+        },
+        _count: { select: { members: true, meetings: true, resources: true } },
+      },
+    });
+
+    const summary = departments
+      .map((dept) => {
+        const totalPoints = dept.members.reduce((acc, m) => acc + m.points, 0);
+        return {
+          id: dept.id,
+          name: dept.name,
+          icon: dept.icon,
+          memberCount: dept._count.members,
+          meetingCount: dept._count.meetings,
+          resourceCount: dept._count.resources,
+          totalPoints,
+        };
+      })
+      .sort((a, b) => b.totalPoints - a.totalPoints);
+
+    res.json(summary);
+  });
+
+  // ---------------------------------------------------------
+  // QUIZ GAME (PHASE 3)
+  // ---------------------------------------------------------
+
+  // Returns live quiz questions WITHOUT answers
+  router.get("/games/quiz", auth, async (_req, res) => {
+    const quiz = await prisma.quiz.findFirst({
+      where: { status: QuizStatus.LIVE },
+      orderBy: { createdAt: "desc" },
+      include: {
+        questions: {
+          orderBy: { position: "asc" },
+          select: {
+            id: true,
+            position: true,
+            prompt: true,
+            timeLimitSeconds: true,
+            options: {
+              select: {
+                id: true,
+                text: true,
+                // CRITICAL: isCorrect is NEVER returned to client
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!quiz) {
+      throw new HttpError(404, "No live quiz is currently available.");
+    }
+
+    res.json({
+      id: quiz.id,
+      title: quiz.title,
+      description: quiz.description,
+      questions: quiz.questions.map((q) => ({
+        id: q.id,
+        position: q.position,
+        prompt: q.prompt,
+        timeLimitSeconds: q.timeLimitSeconds,
+        options: q.options.map((opt) => ({ id: opt.id, text: opt.text })),
+      })),
+    });
+  });
+
+  // Participant starts quiz (records startedAt on server)
+  router.post("/games/quiz/start", auth, async (req, res) => {
+    const userId = currentUserId(req);
+    const body = parseBody(z.object({ quizId: z.string().min(1) }), req.body);
+
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: body.quizId },
+      include: { questions: true },
+    });
+    if (!quiz || quiz.status !== QuizStatus.LIVE) {
+      throw new HttpError(404, "Quiz is not currently available.");
+    }
+
+    // Check today's game cap: max 20 points per day
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const todayPoints = await prisma.pointTransaction.aggregate({
+      where: {
+        userId,
+        sourceType: PointSourceType.QUIZ_GAME,
+        createdAt: { gte: startOfDay },
+      },
+      _sum: { amount: true },
+    });
+    const currentDayPoints = todayPoints._sum.amount ?? 0;
+    const pointsRemainingToday = Math.max(0, 20 - currentDayPoints);
+
+    const startedAt = new Date();
+    const participant = await prisma.quizParticipant.upsert({
+      where: { quizId_userId: { quizId: quiz.id, userId } },
+      create: {
+        quizId: quiz.id,
+        userId,
+        score: 0,
+        joinedAt: startedAt,
+      },
+      update: {
+        joinedAt: startedAt,
+        finishedAt: null,
+      },
+      select: { id: true, joinedAt: true },
+    });
+
+    res.json({
+      participantId: participant.id,
+      startedAt: participant.joinedAt,
+      pointsRemainingToday,
+    });
+  });
+
+  // Participant submits quiz (scored on server only, enforced server timer)
+  router.post("/games/quiz/submit", auth, async (req, res) => {
+    const userId = currentUserId(req);
+    const body = parseBody(quizSubmitSchema, req.body);
+
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: body.quizId },
+      include: {
+        questions: {
+          include: { options: true },
+        },
+      },
+    });
+    if (!quiz) throw new HttpError(404, "Quiz not found.");
+
+    const participant = await prisma.quizParticipant.findUnique({
+      where: { quizId_userId: { quizId: quiz.id, userId } },
+    });
+    if (!participant) {
+      throw new HttpError(400, "You must start the quiz before submitting answers.");
+    }
+
+    // Calculate total time allowed + 10s grace period for network latency
+    const totalTimeLimitSeconds = quiz.questions.reduce((sum, q) => sum + q.timeLimitSeconds, 0);
+    const allowedMs = (totalTimeLimitSeconds + 10) * 1000;
+    const elapsedMs = Date.now() - participant.joinedAt.getTime();
+    const isTimeout = elapsedMs > allowedMs;
+
+    // Score on server only
+    let correctCount = 0;
+    const answerRecords: Array<{
+      participantId: string;
+      questionId: string;
+      optionId: string;
+      isCorrect: boolean;
+      pointsAwarded: number;
+    }> = [];
+
+    const answerMap = new Map(body.answers.map((a) => [a.questionId, a.optionId]));
+
+    for (const question of quiz.questions) {
+      const selectedOptionId = answerMap.get(question.id);
+      const correctOption = question.options.find((o) => o.isCorrect);
+      const isCorrect = !isTimeout && selectedOptionId === correctOption?.id;
+
+      if (isCorrect) correctCount++;
+
+      if (selectedOptionId) {
+        answerRecords.push({
+          participantId: participant.id,
+          questionId: question.id,
+          optionId: selectedOptionId,
+          isCorrect,
+          pointsAwarded: isCorrect ? 5 : 0,
+        });
+      }
+    }
+
+    // Daily cap calculation (max 20 points per day)
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const todayPoints = await prisma.pointTransaction.aggregate({
+      where: {
+        userId,
+        sourceType: PointSourceType.QUIZ_GAME,
+        createdAt: { gte: startOfDay },
+      },
+      _sum: { amount: true },
+    });
+
+    const currentDayPoints = todayPoints._sum.amount ?? 0;
+    const availableCap = Math.max(0, 20 - currentDayPoints);
+    const rawPoints = correctCount * 5;
+    const pointsToAward = Math.min(rawPoints, availableCap);
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Save answers
+      for (const ans of answerRecords) {
+        await tx.quizAnswer.upsert({
+          where: {
+            participantId_questionId: {
+              participantId: ans.participantId,
+              questionId: ans.questionId,
+            },
+          },
+          create: ans,
+          update: ans,
+        });
+      }
+
+      await tx.quizParticipant.update({
+        where: { id: participant.id },
+        data: {
+          score: correctCount,
+          finishedAt: new Date(),
+        },
+      });
+
+      if (pointsToAward > 0) {
+        await awardPoints(
+          tx,
+          userId,
+          pointsToAward,
+          `Quiz: ${quiz.title} (${correctCount}/${quiz.questions.length} correct)`,
+          PointSourceType.QUIZ_GAME,
+          quiz.id,
+        );
+      }
+
+      if (correctCount === quiz.questions.length && quiz.questions.length > 0) {
+        await tx.userBadge.createMany({
+          data: [{ userId, key: "QUIZ_MASTER" }],
+          skipDuplicates: true,
+        });
+      }
+
+      const badges = await evaluateBadges(tx, userId);
+      return { badges };
+    });
+
+    res.json({
+      correctCount,
+      totalQuestions: quiz.questions.length,
+      pointsAwarded: pointsToAward,
+      isTimeout,
+      dailyCapReached: currentDayPoints + pointsToAward >= 20,
+      ...result,
+    });
+  });
+
+  // Admin / Head creates a quiz question
+  router.post("/admin/quizzes", auth, requireRole(UserRole.ADMIN, UserRole.DEPARTMENT_HEAD), async (req, res) => {
+    const userId = currentUserId(req);
+    const schema = z.object({
+      title: z.string().trim().min(1).max(160),
+      description: z.string().trim().max(1000).optional(),
+      questions: z.array(
+        z.object({
+          prompt: z.string().trim().min(1).max(1000),
+          timeLimitSeconds: z.number().int().min(5).max(120).default(30),
+          options: z.array(
+            z.object({
+              text: z.string().trim().min(1).max(300),
+              isCorrect: z.boolean(),
+            }),
+          ).min(2).max(6),
+        }),
+      ).min(1),
+    });
+
+    const body = parseBody(schema, req.body);
+    const created = await prisma.quiz.create({
+      data: {
+        title: body.title,
+        description: body.description,
+        status: QuizStatus.LIVE,
+        createdById: userId,
+        questions: {
+          create: body.questions.map((q, idx) => ({
+            position: idx + 1,
+            prompt: q.prompt,
+            timeLimitSeconds: q.timeLimitSeconds,
+            options: {
+              create: q.options,
+            },
+          })),
+        },
+      },
+    });
+
+    res.status(201).json(created);
+  });
+
+  // ---------------------------------------------------------
+  // NOTICES & ADMIN OVERVIEW
+  // ---------------------------------------------------------
+
+  router.get(
+    "/student-life/notices",
+    auth,
+    requirePermission("student-life:read"),
+    async (_req, res) => {
+      const now = new Date();
+      const notices = await prisma.studentLifeNotice.findMany({
+        where: {
+          isActive: true,
+          startsAt: { lte: now },
+          OR: [{ endsAt: null }, { endsAt: { gte: now } }],
+        },
+        orderBy: { startsAt: "desc" },
+        select: { level: true, title: true, message: true },
+      });
+      res.json({
+        notices: notices.map((notice) => ({
+          ...notice,
+          level: notice.level.toLowerCase(),
+        })),
+      });
+    },
+  );
+
+  router.post("/student-life/notices", auth, requireRole(UserRole.ADMIN), async (req, res) => {
+    const body = parseBody(noticeSchema, req.body);
+    if (body.endsAt && body.endsAt <= new Date()) {
+      throw new HttpError(400, "Notice expiration must be in the future.");
+    }
+    const levels = {
+      emergency: NoticeLevel.EMERGENCY,
+      important: NoticeLevel.IMPORTANT,
+      general: NoticeLevel.GENERAL,
+    };
+    const notice = await prisma.studentLifeNotice.create({
+      data: {
+        title: body.title,
+        message: body.message,
+        level: levels[body.level],
+        endsAt: body.endsAt,
+      },
+    });
+    res.status(201).json({
+      notice: { ...notice, level: notice.level.toLowerCase() },
+    });
   });
 
   router.get("/admin/overview", auth, requireRole(UserRole.ADMIN), async (req, res) => {
@@ -398,14 +1535,22 @@ export function createApiRouter(
     const monthAgo = new Date(now);
     monthAgo.setDate(monthAgo.getDate() - 30);
 
-    const [totalUsers, activeStudents, activeAccounts, newUsersLast30Days, totalAttendance,
-      activeMemberships, matchingUsers, users] = await Promise.all([
+    const [
+      totalUsers,
+      activeMembers,
+      activeAccounts,
+      newUsersLast30Days,
+      totalAttendance,
+      departmentsCount,
+      matchingUsers,
+      users,
+    ] = await Promise.all([
       prisma.user.count(),
-      prisma.user.count({ where: { role: UserRole.STUDENT, isActive: true } }),
+      prisma.user.count({ where: { role: UserRole.MEMBER, isActive: true } }),
       prisma.user.count({ where: { isActive: true } }),
       prisma.user.count({ where: { createdAt: { gte: monthAgo } } }),
       prisma.attendance.count(),
-      prisma.membership.count({ where: { status: MembershipStatus.ACTIVE } }),
+      prisma.department.count(),
       prisma.user.count({ where: userWhere }),
       prisma.user.findMany({
         where: userWhere,
@@ -420,11 +1565,11 @@ export function createApiRouter(
           isActive: true,
           points: true,
           createdAt: true,
+          department: { select: { id: true, name: true, icon: true } },
           _count: {
             select: {
-              memberships: { where: { status: MembershipStatus.ACTIVE } },
-              registrations: { where: { status: RegistrationStatus.CONFIRMED } },
-              attendance: true,
+              attendances: true,
+              resources: true,
             },
           },
         },
@@ -434,11 +1579,11 @@ export function createApiRouter(
     res.json({
       summary: {
         totalUsers,
-        activeStudents,
+        activeMembers,
         activeAccounts,
         newUsersLast30Days,
         totalAttendance,
-        activeMemberships,
+        departmentsCount,
       },
       users: users.map((user) => ({
         id: user.id,
@@ -448,10 +1593,10 @@ export function createApiRouter(
         isActive: user.isActive,
         points: user.points,
         createdAt: user.createdAt,
+        department: user.department,
         counts: {
-          memberships: user._count.memberships,
-          registrations: user._count.registrations,
-          attendance: user._count.attendance,
+          attendances: user._count.attendances,
+          resources: user._count.resources,
         },
       })),
       pagination: {
@@ -463,112 +1608,40 @@ export function createApiRouter(
     });
   });
 
-  router.get(
-    "/student-life/notices",
-    auth,
-    requirePermission("student-life:read"),
-    async (_req, res) => {
-    const now = new Date();
-    const notices = await prisma.studentLifeNotice.findMany({
-      where: {
-        isActive: true,
-        startsAt: { lte: now },
-        OR: [{ endsAt: null }, { endsAt: { gte: now } }],
-      },
-      orderBy: { startsAt: "desc" },
-      select: { level: true, title: true, message: true },
-    });
-      res.json({
-        notices: notices.map((notice) => ({
-          ...notice,
-          level: notice.level.toLowerCase(),
-        })),
-      });
-    },
-  );
-
-  router.post("/student-life/notices", auth, requireRole(UserRole.ADMIN), async (req, res) => {
-      const body = parseBody(noticeSchema, req.body);
-      if (body.endsAt && body.endsAt <= new Date()) {
-        throw new HttpError(400, "Notice expiration must be in the future.");
-      }
-      const levels = {
-        emergency: NoticeLevel.EMERGENCY,
-        important: NoticeLevel.IMPORTANT,
-        general: NoticeLevel.GENERAL,
-      };
-      const notice = await prisma.studentLifeNotice.create({
-        data: {
-          title: body.title,
-          message: body.message,
-          level: levels[body.level],
-          endsAt: body.endsAt,
-        },
-      });
-      res.status(201).json({
-        notice: { ...notice, level: notice.level.toLowerCase() },
-      });
-  });
-
-  router.get("/me", auth, requirePermission("student-life:read"), async (req, res) => {
-    const user = await prisma.user.findUnique({
-      where: { id: currentUserId(req) },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        points: true,
-        badges: { select: { key: true, awardedAt: true } },
-        memberships: {
-          select: {
-            status: true,
-            createdAt: true,
-            club: { select: { id: true, name: true } },
-          },
-          orderBy: { createdAt: "desc" },
-        },
-        registrations: {
-          select: {
-            status: true,
-            createdAt: true,
-            activity: {
-              select: {
-                id: true,
-                title: true,
-                startsAt: true,
-                club: { select: { id: true, name: true } },
-              },
-            },
-          },
-          orderBy: { createdAt: "desc" },
-        },
-        attendance: {
-          select: { punctual: true, goodConduct: true, createdAt: true },
-          orderBy: { createdAt: "desc" },
-        },
-        _count: { select: { attendance: true } },
-      },
-    });
-    if (!user) {
-      throw new HttpError(404, "User not found.");
+  router.patch("/users/:userId/role", auth, requireRole(UserRole.ADMIN), async (req, res) => {
+    const body = parseBody(z.object({ role: z.nativeEnum(UserRole) }), req.body);
+    const targetUserId = routeParam(req, "userId");
+    if (targetUserId === currentUserId(req)) {
+      throw new HttpError(400, "Administrators cannot change their own role.");
     }
+    const user = await prisma.user.update({
+      where: { id: targetUserId },
+      data: { role: body.role },
+      select: { id: true, name: true, email: true, role: true },
+    });
     res.json(user);
   });
+
+  // ---------------------------------------------------------
+  // COMMUNITY INTEGRATION (RETAINED)
+  // ---------------------------------------------------------
 
   router.get("/community/profile", auth, requirePermission("community:read"), async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id: currentUserId(req) },
       select: { communityVisible: true, communityInterests: true },
     });
-    if (!user) {
-      throw new HttpError(404, "User not found.");
-    }
+    if (!user) throw new HttpError(404, "User not found.");
     res.json({ visible: user.communityVisible, interests: user.communityInterests });
   });
 
   router.patch("/community/profile", auth, requirePermission("community:read"), async (req, res) => {
-    const body = parseBody(communityProfileSchema, req.body);
+    const schema = z.object({
+      visible: z.boolean(),
+      interests: z.array(z.enum(["games", "study", "creative"])).max(3)
+        .refine((interests) => new Set(interests).size === interests.length),
+    });
+    const body = parseBody(schema, req.body);
     const profile = await prisma.user.update({
       where: { id: currentUserId(req) },
       data: {
@@ -582,88 +1655,39 @@ export function createApiRouter(
 
   router.get("/community/peers", auth, requirePermission("community:read"), async (req, res) => {
     const userId = currentUserId(req);
+    const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, 100) : "";
     const interest = z.enum(["games", "study", "creative"]).safeParse(req.query.interest);
     if (req.query.interest !== undefined && !interest.success) {
       throw new HttpError(400, "Invalid community interest.");
     }
-    const search = z.string().trim().max(100).safeParse(req.query.search ?? "");
-    if (!search.success) {
-      throw new HttpError(400, "Search text must be 100 characters or fewer.");
-    }
 
-    const [connections, gameInvites] = await Promise.all([
-      prisma.communityConnection.findMany({
-        where: { OR: [{ requesterId: userId }, { recipientId: userId }] },
-      }),
-      prisma.communityGameInvite.findMany({
-        where: { OR: [{ senderId: userId }, { recipientId: userId }] },
-      }),
-    ]);
-    const relatedIds = [...new Set([
-      ...connections.map((connection) =>
-        connection.requesterId === userId ? connection.recipientId : connection.requesterId
-      ),
-      ...gameInvites.map((invite) => invite.senderId === userId ? invite.recipientId : invite.senderId),
-    ])];
     const communityProfiles = await prisma.user.findMany({
       where: {
         id: { not: userId },
         isActive: true,
         emailVerified: true,
         role: { not: UserRole.ADMIN },
-        ...(search.data ? { name: { contains: search.data, mode: "insensitive" as const } } : {}),
         OR: [
           {
             communityVisible: true,
-            ...(interest.success && interest.data
-              ? { communityInterests: { has: interest.data } }
-              : {}),
+            ...(interest.success && interest.data ? { communityInterests: { has: interest.data } } : {}),
           },
-          ...(relatedIds.length > 0 ? [{ id: { in: relatedIds } }] : []),
         ],
+        ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {}),
       },
       orderBy: { name: "asc" },
       take: 100,
       select: { id: true, name: true, communityVisible: true, communityInterests: true },
     });
 
-    res.json(communityProfiles.map((profile) => {
-      const peerConnections = connections.filter((connection) =>
-        connection.requesterId === profile.id || connection.recipientId === profile.id
-      );
-      const peerInvites = gameInvites.filter((invite) =>
-        invite.senderId === profile.id || invite.recipientId === profile.id
-      );
-      const connection = peerConnections.sort(
-        (left, right) => right.updatedAt.getTime() - left.updatedAt.getTime(),
-      )[0];
-      const gameInvite = peerInvites
-        .filter((invite) => invite.status === CommunityRequestStatus.PENDING)
-        .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())[0];
-      return {
-        id: profile.id,
-        name: profile.name,
-        communityVisible: profile.communityVisible,
-        interests: profile.communityInterests,
-        connection: connection
-          ? {
-              id: connection.id,
-              status: connection.status,
-              requesterId: connection.requesterId,
-              recipientId: connection.recipientId,
-            }
-          : null,
-        gameInvite: gameInvite
-          ? {
-              id: gameInvite.id,
-              game: gameInvite.game,
-              status: gameInvite.status,
-              senderId: gameInvite.senderId,
-              recipientId: gameInvite.recipientId,
-            }
-          : null,
-      };
-    }));
+    res.json(communityProfiles.map((p) => ({
+      id: p.id,
+      name: p.name,
+      communityVisible: p.communityVisible,
+      interests: p.communityInterests,
+      connection: null,
+      gameInvite: null,
+    })));
   });
 
   router.post(
@@ -728,32 +1752,14 @@ export function createApiRouter(
     },
   );
 
-  router.patch(
-    "/community/connections/:connectionId",
-    auth,
-    requirePermission("community:read"),
-    async (req, res) => {
-      const body = parseBody(communityRequestStatusSchema, req.body);
-      const connectionId = routeParam(req, "connectionId");
-      const connection = await prisma.communityConnection.findUnique({
-        where: { id: connectionId },
-      });
-      if (!connection || connection.recipientId !== currentUserId(req)) {
-        throw new HttpError(404, "Connection request not found.");
-      }
-      if (connection.status !== CommunityRequestStatus.PENDING) {
-        throw new HttpError(409, "This connection request has already been handled.");
-      }
-      const updated = await prisma.communityConnection.update({
-        where: { id: connectionId },
-        data: { status: body.status },
-      });
-      res.json({ connection: updated });
-    },
-  );
-
   router.post("/community/game-invites", auth, requirePermission("community:read"), async (req, res) => {
-    const body = parseBody(communityGameInviteSchema, req.body);
+    const body = parseBody(
+      z.object({
+        recipientId: z.string().min(1),
+        game: z.nativeEnum(CommunityGameKey),
+      }),
+      req.body,
+    );
     const senderId = currentUserId(req);
     if (senderId === body.recipientId) {
       throw new HttpError(400, "You cannot invite yourself to a game.");
@@ -785,44 +1791,11 @@ export function createApiRouter(
     if (!connection) {
       throw new HttpError(403, "Connect with this student before sending a game invitation.");
     }
-    const pending = await prisma.communityGameInvite.findFirst({
-      where: {
-        senderId,
-        recipientId: body.recipientId,
-        game: body.game,
-        status: CommunityRequestStatus.PENDING,
-      },
-    });
-    if (pending) {
-      throw new HttpError(409, "A game invitation is already pending.");
-    }
     const gameInvite = await prisma.communityGameInvite.create({
       data: { senderId, recipientId: body.recipientId, game: body.game },
     });
     res.status(201).json({ gameInvite });
   });
-
-  router.patch(
-    "/community/game-invites/:inviteId",
-    auth,
-    requirePermission("community:read"),
-    async (req, res) => {
-      const body = parseBody(communityRequestStatusSchema, req.body);
-      const inviteId = routeParam(req, "inviteId");
-      const invite = await prisma.communityGameInvite.findUnique({ where: { id: inviteId } });
-      if (!invite || invite.recipientId !== currentUserId(req)) {
-        throw new HttpError(404, "Game invitation not found.");
-      }
-      if (invite.status !== CommunityRequestStatus.PENDING) {
-        throw new HttpError(409, "This game invitation has already been handled.");
-      }
-      const updated = await prisma.communityGameInvite.update({
-        where: { id: inviteId },
-        data: { status: body.status },
-      });
-      res.json({ gameInvite: updated });
-    },
-  );
 
   router.get("/community/meetups", auth, requirePermission("community:read"), async (req, res) => {
     const userId = currentUserId(req);
@@ -853,7 +1826,7 @@ export function createApiRouter(
       if (!meetup.success) {
         throw new HttpError(400, "Invalid meetup.");
       }
-      const body = parseBody(communityMeetupInterestSchema, req.body);
+      const body = parseBody(z.object({ interested: z.boolean() }), req.body);
       const userId = currentUserId(req);
       if (body.interested) {
         await prisma.communityMeetupInterest.upsert({
@@ -872,260 +1845,6 @@ export function createApiRouter(
       res.json({ meetup: meetup.data, interested: body.interested, interestedCount });
     },
   );
-
-  router.patch("/users/:userId/role", auth, requireRole(UserRole.ADMIN), async (req, res) => {
-    const body = parseBody(z.object({ role: z.nativeEnum(UserRole) }), req.body);
-    const targetUserId = routeParam(req, "userId");
-    if (targetUserId === currentUserId(req)) {
-      throw new HttpError(400, "Administrators cannot change their own role.");
-    }
-    const user = await prisma.user.update({
-      where: { id: targetUserId },
-      data: { role: body.role },
-      select: { id: true, name: true, email: true, role: true },
-    });
-    res.json(user);
-  });
-
-  router.get("/clubs", async (_req, res) => {
-    const clubs = await prisma.club.findMany({
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        membershipFeeCents: true,
-        leader: { select: { id: true, name: true } },
-        _count: { select: { memberships: { where: { status: MembershipStatus.ACTIVE } } } },
-      },
-    });
-    res.json(clubs);
-  });
-
-  router.post("/clubs", auth, requireRole(UserRole.ADMIN), async (req, res) => {
-    const body = parseBody(clubSchema, req.body);
-    const leader = await prisma.user.findUnique({
-      where: { id: body.leaderId },
-      select: { role: true, isActive: true },
-    });
-    if (!leader || !leader.isActive || leader.role !== UserRole.CLUB_LEADER) {
-      throw new HttpError(400, "The selected leader must be an active club leader.");
-    }
-    const club = await prisma.club.create({ data: body });
-    res.status(201).json(club);
-  });
-
-  router.post("/clubs/:clubId/join", auth, async (req, res) => {
-    const userId = currentUserId(req);
-    const clubId = routeParam(req, "clubId");
-    const club = await prisma.club.findUnique({ where: { id: clubId } });
-    if (!club) {
-      throw new HttpError(404, "Club not found.");
-    }
-
-    const priorMembership = await prisma.membership.findUnique({
-      where: { userId_clubId: { userId, clubId: club.id } },
-    });
-    if (priorMembership?.status === MembershipStatus.ACTIVE) {
-      throw new HttpError(409, "You already have an active club membership.");
-    }
-
-    const membership = priorMembership
-      ? await prisma.membership.update({
-          where: { id: priorMembership.id },
-          data: { status: MembershipStatus.ACTIVE },
-        })
-      : await prisma.membership.create({
-          data: {
-            userId,
-            clubId: club.id,
-            status: MembershipStatus.ACTIVE,
-          },
-        });
-
-    res.status(201).json({ membership });
-  });
-
-  router.get("/activities", async (_req, res) => {
-    const activities = await prisma.activity.findMany({
-      where: { startsAt: { gt: new Date() } },
-      orderBy: { startsAt: "asc" },
-      select: {
-        id: true,
-        clubId: true,
-        title: true,
-        description: true,
-        startsAt: true,
-        registrationFeeCents: true,
-        club: { select: { id: true, name: true } },
-        _count: { select: { registrations: { where: { status: RegistrationStatus.CONFIRMED } } } },
-      },
-    });
-    res.json(activities);
-  });
-
-  router.get("/clubs/:clubId/activities", async (req, res) => {
-    const activities = await prisma.activity.findMany({
-      where: { clubId: routeParam(req, "clubId") },
-      orderBy: { startsAt: "asc" },
-      select: {
-        id: true,
-        clubId: true,
-        title: true,
-        description: true,
-        startsAt: true,
-        registrationFeeCents: true,
-        _count: { select: { registrations: { where: { status: RegistrationStatus.CONFIRMED } } } },
-      },
-    });
-    res.json(activities);
-  });
-
-  router.post("/clubs/:clubId/activities", auth, async (req, res) => {
-    const userId = currentUserId(req);
-    const body = parseBody(activitySchema, req.body);
-    if (body.startsAt.getTime() <= Date.now()) {
-      throw new HttpError(400, "Activity start time must be in the future.");
-    }
-    const role = req.user?.role;
-    if (!role) {
-      throw new HttpError(401, "Authentication is required.");
-    }
-    const clubId = routeParam(req, "clubId");
-    await assertClubManager(prisma, clubId, userId, role);
-    const activity = await prisma.activity.create({
-      data: { ...body, clubId },
-    });
-    res.status(201).json(activity);
-  });
-
-  router.post("/activities/:activityId/register", auth, async (req, res) => {
-    const userId = currentUserId(req);
-    const activity = await prisma.activity.findUnique({
-      where: { id: routeParam(req, "activityId") },
-      include: { club: { select: { name: true } } },
-    });
-    if (!activity) {
-      throw new HttpError(404, "Activity not found.");
-    }
-    if (activity.startsAt <= new Date()) {
-      throw new HttpError(400, "Registration is closed for this activity.");
-    }
-
-    const prior = await prisma.activityRegistration.findUnique({
-      where: { userId_activityId: { userId, activityId: activity.id } },
-    });
-    if (prior?.status === RegistrationStatus.CONFIRMED) {
-      throw new HttpError(409, "You already have an active registration.");
-    }
-
-    const registration = prior
-      ? await prisma.activityRegistration.update({
-          where: { id: prior.id },
-          data: { status: RegistrationStatus.CONFIRMED },
-        })
-      : await prisma.activityRegistration.create({
-          data: {
-            userId,
-            activityId: activity.id,
-            status: RegistrationStatus.CONFIRMED,
-          },
-        });
-
-    res.status(201).json({ registration });
-  });
-
-  router.post("/activities/:activityId/attendance", auth, async (req, res) => {
-    const body = parseBody(attendanceSchema, req.body);
-    const actorId = currentUserId(req);
-
-    if (body.userId === actorId) {
-      throw new HttpError(403, "You cannot record attendance or award points to yourself.");
-    }
-
-    const activity = await prisma.activity.findUnique({
-      where: { id: routeParam(req, "activityId") },
-      select: { id: true, clubId: true, startsAt: true },
-    });
-    if (!activity) {
-      throw new HttpError(404, "Activity not found.");
-    }
-    if (activity.startsAt > new Date()) {
-      throw new HttpError(400, "Attendance cannot be recorded before the activity starts.");
-    }
-    const actorRole = req.user?.role;
-    if (!actorRole) {
-      throw new HttpError(401, "Authentication is required.");
-    }
-    await assertClubManager(prisma, activity.clubId, actorId, actorRole);
-
-    const priorAttendance = await prisma.attendance.findUnique({
-      where: { userId_activityId: { userId: body.userId, activityId: activity.id } },
-    });
-    if (priorAttendance) {
-      throw new HttpError(409, "Attendance has already been recorded for this user.");
-    }
-
-    const registration = await prisma.activityRegistration.findUnique({
-      where: { userId_activityId: { userId: body.userId, activityId: activity.id } },
-    });
-    if (registration?.status !== RegistrationStatus.CONFIRMED) {
-      throw new HttpError(400, "Attendance can only be recorded for confirmed registrations.");
-    }
-
-    const pointsAwarded = 10 + (body.punctual ? 5 : 0) + (body.goodConduct ? 3 : 0);
-    const result = await prisma.$transaction(async (tx) => {
-      await tx.attendance.create({
-        data: {
-          userId: body.userId,
-          activityId: activity.id,
-          punctual: body.punctual,
-          goodConduct: body.goodConduct,
-          pointsAwarded,
-        },
-      });
-      const user = await tx.user.update({
-        where: { id: body.userId },
-        data: { points: { increment: pointsAwarded } },
-        select: { id: true, points: true },
-      });
-
-      const [participationCount, punctualCount, goodConductCount] = await Promise.all([
-        tx.attendance.count({ where: { userId: body.userId } }),
-        tx.attendance.count({ where: { userId: body.userId, punctual: true } }),
-        tx.attendance.count({ where: { userId: body.userId, goodConduct: true } }),
-      ]);
-      const earnedBadges = [
-        ...(participationCount >= 10 ? ["PARTICIPATION_10"] : []),
-        ...(punctualCount >= 5 ? ["PUNCTUALITY_5"] : []),
-        ...(goodConductCount >= 5 ? ["GOOD_CONDUCT_5"] : []),
-      ];
-      if (earnedBadges.length > 0) {
-        await tx.userBadge.createMany({
-          data: earnedBadges.map((key) => ({ userId: body.userId, key })),
-          skipDuplicates: true,
-        });
-      }
-
-      return { user, earnedBadges };
-    });
-
-    res.status(201).json({ attendance: { pointsAwarded }, ...result });
-  });
-
-  router.get("/leaderboard", auth, async (req, res) => {
-    const limitResult = z.coerce.number().int().min(1).max(100).safeParse(req.query.limit ?? 20);
-    if (!limitResult.success) {
-      throw new HttpError(400, "limit must be an integer between 1 and 100.");
-    }
-    const users = await prisma.user.findMany({
-      where: { isActive: true, role: { not: UserRole.ADMIN } },
-      orderBy: [{ points: "desc" }, { name: "asc" }],
-      take: limitResult.data,
-      select: { id: true, name: true, points: true },
-    });
-    res.json(users);
-  });
 
   return router;
 }

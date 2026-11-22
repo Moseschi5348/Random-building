@@ -3,39 +3,29 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 enum UserRole {
-  STUDENT
-  CLUB_LEADER
+  MEMBER
+  DEPARTMENT_HEAD
   ADMIN
 }
 
-enum MembershipStatus {
-  PENDING
-  ACTIVE
-  CANCELLED
+enum PointSourceType {
+  MEETING_ATTENDANCE
+  QUIZ_GAME
+  ADMIN_ADJUSTMENT
 }
 
-enum RegistrationStatus {
-  PENDING
-  CONFIRMED
-  CANCELLED
-}
-
-enum PaymentStatus {
-  PENDING
-  SUCCEEDED
-  FAILED
-  EXPIRED
-}
-
-enum PaymentType {
-  MEMBERSHIP
-  ACTIVITY
+enum ResourceCategory {
+  DESIGN
+  REPO
+  DOCUMENT
+  TOOL
+  OTHER
 }
 
 enum NoticeLevel {
@@ -70,46 +60,127 @@ enum CommunityMeetupKey {
 }
 
 model User {
-  id            String       @id @default(cuid())
-  name          String       @db.VarChar(120)
-  email         String       @unique @db.VarChar(254)
-  passwordHash  String?
-  googleId      String?      @unique
-  emailVerified Boolean      @default(false)
-  role          UserRole     @default(STUDENT)
-  points        Int          @default(0)
-  isActive      Boolean      @default(true)
-  memberships   Membership[]
-  registrations ActivityRegistration[]
-  attendance    Attendance[]
-  badges        UserBadge[]
-  payments      Payment[]
-  sessions      Session[]
-  quizParticipations QuizParticipant[]
-  hostedQuizzes Quiz[]       @relation("QuizHost")
-  ledClubs      Club[]       @relation("ClubLeader")
-  communityVisible Boolean  @default(false)
-  communityInterests String[] @default([])
-  sentConnections CommunityConnection[] @relation("ConnectionRequester")
-  receivedConnections CommunityConnection[] @relation("ConnectionRecipient")
-  sentGameInvites CommunityGameInvite[] @relation("GameInviteSender")
-  receivedGameInvites CommunityGameInvite[] @relation("GameInviteRecipient")
-  meetupInterests CommunityMeetupInterest[]
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id                  String                    @id @default(cuid())
+  name                String                    @db.VarChar(120)
+  email               String                    @unique @db.VarChar(254)
+  passwordHash        String?
+  googleId            String?                   @unique
+  emailVerified       Boolean                   @default(false)
+  role                UserRole                  @default(MEMBER)
+  points              Int                       @default(0)
+  isActive            Boolean                   @default(true)
+  departmentId        String?
+  department          Department?               @relation("DepartmentMembers", fields: [departmentId], references: [id], onDelete: SetNull)
+  headedDepartment    Department?               @relation("DepartmentHead")
+  sessions            Session[]
+  attendances         Attendance[]
+  badges              UserBadge[]
+  transactions        PointTransaction[]
+  resources           Resource[]
+  hostedMeetings      Meeting[]                 @relation("MeetingHost")
+  hostedQuizzes       Quiz[]                    @relation("QuizHost")
+  quizParticipations  QuizParticipant[]
+  communityVisible    Boolean                   @default(false)
+  communityInterests  String[]                  @default([])
+  sentConnections     CommunityConnection[]     @relation("ConnectionRequester")
+  receivedConnections CommunityConnection[]     @relation("ConnectionRecipient")
+  sentGameInvites     CommunityGameInvite[]     @relation("GameInviteSender")
+  receivedGameInvites CommunityGameInvite[]     @relation("GameInviteRecipient")
+  meetupInterests     CommunityMeetupInterest[]
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  @@index([departmentId])
+  @@index([points(sort: Desc)])
 }
 
-model RegistrationChallenge {
-  email        String   @id @db.VarChar(254)
-  name         String   @db.VarChar(120)
-  passwordHash String
-  otpHash      String   @db.VarChar(64)
-  attempts     Int      @default(0)
-  expiresAt    DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+model Department {
+  id          String     @id @default(cuid())
+  name        String     @unique @db.VarChar(120)
+  description String     @db.VarChar(2000)
+  icon        String     @default("◈") @db.VarChar(16)
+  headId      String?    @unique
+  head        User?      @relation("DepartmentHead", fields: [headId], references: [id], onDelete: SetNull)
+  members     User[]     @relation("DepartmentMembers")
+  meetings    Meeting[]
+  resources   Resource[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
 
-  @@index([expiresAt])
+model Meeting {
+  id             String       @id @default(cuid())
+  departmentId   String?
+  department     Department?  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  title          String       @db.VarChar(160)
+  description    String       @db.VarChar(2000)
+  startsAt       DateTime
+  endsAt         DateTime
+  attendanceCode String?      @db.VarChar(12)
+  codeExpiresAt  DateTime?
+  createdById    String
+  createdBy      User         @relation("MeetingHost", fields: [createdById], references: [id], onDelete: Restrict)
+  attendances    Attendance[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([departmentId, startsAt])
+  @@index([startsAt])
+}
+
+model Attendance {
+  id            String   @id @default(cuid())
+  userId        String
+  meetingId     String
+  punctual      Boolean  @default(false)
+  pointsAwarded Int
+  checkedInAt   DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meeting       Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, meetingId])
+  @@index([userId])
+  @@index([meetingId])
+}
+
+model PointTransaction {
+  id         String          @id @default(cuid())
+  userId     String
+  amount     Int
+  reason     String          @db.VarChar(255)
+  sourceType PointSourceType
+  sourceId   String?
+  createdAt  DateTime        @default(now())
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([sourceType, createdAt])
+}
+
+model Resource {
+  id           String           @id @default(cuid())
+  departmentId String
+  userId       String
+  title        String           @db.VarChar(160)
+  url          String           @db.VarChar(2000)
+  category     ResourceCategory @default(OTHER)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  department   Department       @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([departmentId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String   @db.VarChar(64)
+  awardedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
 }
 
 model Session {
@@ -141,36 +212,36 @@ model StudentLifeNotice {
 }
 
 model Quiz {
-  id                      String        @id @default(cuid())
-  title                   String        @db.VarChar(160)
-  description             String?       @db.VarChar(1000)
-  joinCode                String?       @unique @db.VarChar(6)
-  status                  QuizStatus    @default(DRAFT)
-  currentQuestionPosition Int           @default(0)
+  id                      String            @id @default(cuid())
+  title                   String            @db.VarChar(160)
+  description             String?           @db.VarChar(1000)
+  joinCode                String?           @unique @db.VarChar(6)
+  status                  QuizStatus        @default(DRAFT)
+  currentQuestionPosition Int               @default(0)
   questionStartedAt       DateTime?
   startedAt               DateTime?
   finishedAt              DateTime?
   createdById             String
-  createdBy               User          @relation("QuizHost", fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy               User              @relation("QuizHost", fields: [createdById], references: [id], onDelete: Restrict)
   questions               QuizQuestion[]
   participants            QuizParticipant[]
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
 
   @@index([createdById, createdAt])
   @@index([status, createdAt])
 }
 
 model QuizQuestion {
-  id                String       @id @default(cuid())
-  quizId            String
-  position          Int
-  prompt            String       @db.VarChar(1000)
-  timeLimitSeconds  Int          @default(30)
-  quiz              Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  options           QuizOption[]
-  answers           QuizAnswer[]
-  createdAt         DateTime     @default(now())
+  id               String       @id @default(cuid())
+  quizId           String
+  position         Int
+  prompt           String       @db.VarChar(1000)
+  timeLimitSeconds Int          @default(30)
+  quiz             Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options          QuizOption[]
+  answers          QuizAnswer[]
+  createdAt        DateTime     @default(now())
 
   @@unique([quizId, position])
 }
@@ -200,88 +271,19 @@ model QuizParticipant {
 }
 
 model QuizAnswer {
-  id              String         @id @default(cuid())
-  participantId   String
-  questionId      String
-  optionId        String
-  isCorrect       Boolean
-  pointsAwarded   Int            @default(0)
-  answeredAt      DateTime       @default(now())
-  participant     QuizParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  question        QuizQuestion   @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  option          QuizOption     @relation(fields: [optionId], references: [id], onDelete: Restrict)
+  id            String          @id @default(cuid())
+  participantId String
+  questionId    String
+  optionId      String
+  isCorrect     Boolean
+  pointsAwarded Int             @default(0)
+  answeredAt    DateTime        @default(now())
+  participant   QuizParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  question      QuizQuestion    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  option        QuizOption      @relation(fields: [optionId], references: [id], onDelete: Restrict)
 
   @@unique([participantId, questionId])
   @@index([questionId])
-}
-
-model Club {
-  id                 String       @id @default(cuid())
-  name               String       @db.VarChar(120)
-  description        String       @db.VarChar(2000)
-  membershipFeeCents Int          @default(0)
-  leaderId           String
-  leader             User         @relation("ClubLeader", fields: [leaderId], references: [id], onDelete: Restrict)
-  memberships        Membership[]
-  activities         Activity[]
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
-}
-
-model Membership {
-  id        String           @id @default(cuid())
-  userId    String
-  clubId    String
-  status    MembershipStatus @default(PENDING)
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  club      Club             @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  payments  Payment[]
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-
-  @@unique([userId, clubId])
-}
-
-model Activity {
-  id                   String                  @id @default(cuid())
-  clubId               String
-  title                String                  @db.VarChar(160)
-  description          String                  @db.VarChar(2000)
-  startsAt             DateTime
-  registrationFeeCents Int                     @default(0)
-  club                 Club                    @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  registrations        ActivityRegistration[]
-  attendance           Attendance[]
-  createdAt            DateTime                @default(now())
-  updatedAt            DateTime                @updatedAt
-}
-
-model ActivityRegistration {
-  id         String             @id @default(cuid())
-  userId     String
-  activityId String
-  status     RegistrationStatus @default(PENDING)
-  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activity   Activity           @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  payments   Payment[]
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
-
-  @@unique([userId, activityId])
-}
-
-model Attendance {
-  id            String   @id @default(cuid())
-  userId        String
-  activityId    String
-  punctual      Boolean  @default(false)
-  goodConduct   Boolean  @default(false)
-  pointsAwarded Int
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activity      Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  createdAt     DateTime @default(now())
-
-  @@unique([userId, activityId])
 }
 
 model CommunityConnection {
@@ -322,33 +324,4 @@ model CommunityMeetupInterest {
 
   @@unique([userId, meetup])
   @@index([meetup])
-}
-
-model UserBadge {
-  id        String   @id @default(cuid())
-  userId    String
-  key       String   @db.VarChar(64)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  awardedAt DateTime @default(now())
-
-  @@unique([userId, key])
-}
-
-model Payment {
-  id                       String        @id @default(cuid())
-  userId                   String
-  membershipId             String?
-  activityRegistrationId   String?
-  type                     PaymentType
-  status                  PaymentStatus @default(PENDING)
-  amountCents              Int
-  currency                 String        @default("usd") @db.VarChar(3)
-  stripeCheckoutSessionId  String?       @unique
-  user                     User          @relation(fields: [userId], references: [id], onDelete: Restrict)
-  membership               Membership?   @relation(fields: [membershipId], references: [id], onDelete: Restrict)
-  activityRegistration     ActivityRegistration? @relation(fields: [activityRegistrationId], references: [id], onDelete: Restrict)
-  createdAt                DateTime      @default(now())
-  updatedAt                DateTime      @updatedAt
-
-  @@index([userId, createdAt])
 }

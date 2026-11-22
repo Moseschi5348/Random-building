@@ -11,7 +11,7 @@ describe("cookie session authentication", () => {
     id: "session-id",
     csrfToken,
     expiresAt: new Date(Date.now() + 60_000),
-    user: { id: "user-id", role: UserRole.STUDENT, isActive: true, emailVerified: true },
+    user: { id: "user-id", role: UserRole.MEMBER, isActive: true, emailVerified: true },
   });
   const prisma = {
     session: { findUnique: sessionFindUnique, deleteMany: vi.fn() },

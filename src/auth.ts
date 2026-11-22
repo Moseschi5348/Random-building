@@ -17,8 +17,8 @@ type AuthenticatedUser = {
 export type AppPermission = "student-life:read" | "community:read";
 
 const rolePermissions: Record<UserRole, AppPermission[]> = {
-  STUDENT: ["student-life:read", "community:read"],
-  CLUB_LEADER: ["student-life:read", "community:read"],
+  MEMBER: ["student-life:read", "community:read"],
+  DEPARTMENT_HEAD: ["student-life:read", "community:read"],
   ADMIN: ["student-life:read", "community:read"],
 };
 

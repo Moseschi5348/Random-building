@@ -41,7 +41,7 @@ const prisma = {
       expiresAt: new Date(Date.now() + 60_000),
       user: {
         id: "student-1",
-        role: UserRole.STUDENT,
+        role: UserRole.MEMBER,
         isActive: true,
         emailVerified: sessionVerified,
       },
@@ -79,6 +79,7 @@ const config: AppConfig = {
   clientUrl: "http://localhost:3000",
   corsOrigins: ["http://localhost:3000"],
   adminEmail: null,
+  allowedEmailDomains: [],
   google: null,
 };
 

@@ -17,6 +17,7 @@ const configSchema = z.object({
     "CORS_ORIGIN cannot contain a wildcard.",
   ),
   ADMIN_EMAIL: optionalEnvString.pipe(z.string().email().optional()),
+  ALLOWED_EMAIL_DOMAINS: optionalEnvString,
   GOOGLE_CLIENT_ID: optionalEnvString.pipe(z.string().min(1).optional()),
   GOOGLE_CLIENT_SECRET: optionalEnvString.pipe(z.string().min(1).optional()),
   GOOGLE_CALLBACK_URL: optionalEnvString.pipe(z.string().url().optional()),
@@ -43,6 +44,7 @@ export type AppConfig = {
   clientUrl: string;
   corsOrigins: string[];
   adminEmail: string | null;
+  allowedEmailDomains: string[];
   google: {
     clientId: string;
     clientSecret: string;
@@ -70,6 +72,9 @@ export function getConfig(): AppConfig {
         }
       : null;
   const adminEmail = parsed.data.ADMIN_EMAIL?.trim().toLowerCase() ?? null;
+  const allowedEmailDomains = parsed.data.ALLOWED_EMAIL_DOMAINS
+    ? parsed.data.ALLOWED_EMAIL_DOMAINS.split(",").map((d) => d.trim().toLowerCase()).filter(Boolean)
+    : [];
 
   if (corsOrigins.some((origin) => {
     try {
@@ -109,6 +114,7 @@ export function getConfig(): AppConfig {
     clientUrl: parsed.data.CLIENT_URL,
     corsOrigins,
     adminEmail,
+    allowedEmailDomains,
     google,
   };
 }
