@@ -18,7 +18,7 @@ const configSchema = z.object({
     (value) => !value.split(",").some((origin) => origin.trim() === "*"),
     "CORS_ORIGIN cannot contain a wildcard.",
   ),
-  ADMIN_EMAIL: z.string().email().optional(),
+  ADMIN_EMAIL: optionalEnvString.pipe(z.string().email().optional()),
   GOOGLE_CLIENT_ID: optionalEnvString.pipe(z.string().min(1).optional()),
   GOOGLE_CLIENT_SECRET: optionalEnvString.pipe(z.string().min(1).optional()),
   GOOGLE_CALLBACK_URL: optionalEnvString.pipe(z.string().url().optional()),
@@ -57,6 +57,7 @@ export type AppConfig = {
   } | null;
   clientUrl: string;
   corsOrigins: string[];
+  adminEmail: string | null;
   google: {
     clientId: string;
     clientSecret: string;
@@ -83,6 +84,7 @@ export function getConfig(): AppConfig {
           callbackUrl: parsed.data.GOOGLE_CALLBACK_URL,
         }
       : null;
+  const adminEmail = parsed.data.ADMIN_EMAIL?.trim().toLowerCase() ?? null;
   const stripe =
     parsed.data.STRIPE_SECRET_KEY && parsed.data.STRIPE_WEBHOOK_SECRET
       ? {
@@ -131,6 +133,7 @@ export function getConfig(): AppConfig {
     stripe,
     clientUrl: parsed.data.CLIENT_URL,
     corsOrigins,
+    adminEmail,
     google,
   };
 }

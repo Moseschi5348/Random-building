@@ -15,7 +15,9 @@ The OAuth state and nonce are random, short-lived, HTTP-only cookies. The backen
 
 ## Admin account
 
-Set `ADMIN_EMAIL` to the Google account that should administer DIS and run `npm run db:seed` once after applying database migrations. That Google account receives the `ADMIN` role on its first sign-in.
+Set `ADMIN_EMAIL` to the Google account that should administer DIS in the server environment. A sign-in with that verified account is assigned the `ADMIN` role. Alternatively, run `npm run db:seed` once after applying database migrations to create or promote the administrator record before sign-in.
+
+Administrators can open `admin.html` to view account totals and search a paginated directory with each person's role, account status, points, active memberships, confirmed activity registrations, and recorded attendance. The overview API requires an authenticated `ADMIN` session.
 
 ## Session behavior
 

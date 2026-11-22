@@ -51,6 +51,12 @@ const noticeSchema = z.object({
   endsAt: z.string().datetime().transform((value) => new Date(value)).optional(),
 });
 
+const adminUsersQuerySchema = z.object({
+  search: z.string().trim().max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+
 const GOOGLE_STATE_COOKIE = "dis_google_state";
 const GOOGLE_NONCE_COOKIE = "dis_google_nonce";
 const GOOGLE_AUTH_COOKIE_TTL_SECONDS = 600;
@@ -315,6 +321,13 @@ export function createApiRouter(
         select: userSelect,
       });
     }
+    if (config.adminEmail === user.email && user.role !== UserRole.ADMIN) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { role: UserRole.ADMIN },
+        select: userSelect,
+      });
+    }
 
     await createLoginSession(prisma, user.id, secure, res);
     res.redirect(302, new URL("/home.html", config.clientUrl).toString());
@@ -346,6 +359,86 @@ export function createApiRouter(
     }
     clearSessionCookie(res, config.nodeEnv === "production");
     res.status(204).send();
+  });
+
+  router.get("/admin/overview", auth, requireRole(UserRole.ADMIN), async (req, res) => {
+    const query = parseBody(adminUsersQuerySchema, req.query);
+    const search = query.search || undefined;
+    const userWhere = search
+      ? {
+          OR: [
+            { name: { contains: search, mode: "insensitive" as const } },
+            { email: { contains: search, mode: "insensitive" as const } },
+          ],
+        }
+      : {};
+    const now = new Date();
+    const monthAgo = new Date(now);
+    monthAgo.setDate(monthAgo.getDate() - 30);
+
+    const [totalUsers, activeStudents, activeAccounts, newUsersLast30Days, totalAttendance,
+      activeMemberships, matchingUsers, users] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { role: UserRole.STUDENT, isActive: true } }),
+      prisma.user.count({ where: { isActive: true } }),
+      prisma.user.count({ where: { createdAt: { gte: monthAgo } } }),
+      prisma.attendance.count(),
+      prisma.membership.count({ where: { status: MembershipStatus.ACTIVE } }),
+      prisma.user.count({ where: userWhere }),
+      prisma.user.findMany({
+        where: userWhere,
+        orderBy: { createdAt: "desc" },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          points: true,
+          createdAt: true,
+          _count: {
+            select: {
+              memberships: { where: { status: MembershipStatus.ACTIVE } },
+              registrations: { where: { status: RegistrationStatus.CONFIRMED } },
+              attendance: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    res.json({
+      summary: {
+        totalUsers,
+        activeStudents,
+        activeAccounts,
+        newUsersLast30Days,
+        totalAttendance,
+        activeMemberships,
+      },
+      users: users.map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role.toLowerCase().replaceAll("_", "-"),
+        isActive: user.isActive,
+        points: user.points,
+        createdAt: user.createdAt,
+        counts: {
+          memberships: user._count.memberships,
+          registrations: user._count.registrations,
+          attendance: user._count.attendance,
+        },
+      })),
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        total: matchingUsers,
+        pages: Math.ceil(matchingUsers / query.limit),
+      },
+    });
   });
 
   router.get(

@@ -16,7 +16,7 @@ GitHub stores this project's source code and migrations. Student and activity re
 2. Create a Google OAuth client for a web application. Add `http://localhost:3000/api/auth/google/callback` as an authorized redirect URI for local development.
 3. Copy `.env.example` to `.env`. Set the database URLs and Google OAuth client ID/secret/callback URL. Stripe keys are optional; without them, paid registrations and Stripe webhooks are disabled while free sign-ups and Google sign-in continue to work. Keep secrets server-side; never commit `.env` or put credentials in frontend code. See [AUTH-INTEGRATION.md](./AUTH-INTEGRATION.md) for Google Cloud setup.
 4. Run `npx prisma migrate deploy` to apply the database migrations.
-5. To seed an administrator, set `ADMIN_EMAIL` to that administrator's Google account email and run `npm run db:seed`. The account receives the administrator role when it signs in with Google.
+5. Set `ADMIN_EMAIL` to the administrator's Google account email. That verified Google account receives the administrator role when it signs in. You can also run `npm run db:seed` to create or promote the administrator record before first sign-in.
 6. Run `npm run dev` and open `http://localhost:3000`. The Express server serves the frontend and API from the same origin.
 
 Any Google account with a verified email can sign in; DIS does not restrict email domains or independently verify school enrollment. New accounts receive the `STUDENT` role. Existing user and activity records are preserved by the Google sign-in migration; password sign-in is no longer available.
@@ -54,6 +54,7 @@ All API paths are under `/api`.
 | GET | `/auth/google/callback` | Public; verifies Google identity and creates session |
 | GET | `/auth/session` | Signed-in user |
 | POST | `/auth/logout` | Signed-in user; CSRF protected |
+| GET | `/admin/overview` | Administrator; account totals and paginated participation directory |
 | GET | `/me` | Signed-in user |
 | GET | `/clubs` | Public |
 | POST | `/clubs` | Administrator |
@@ -77,6 +78,7 @@ Attendance awards 10 participation points, plus 5 for punctuality and 3 for good
 ## Security baseline
 
 - Google sign-in validates the OAuth state, nonce, token audience/signature, and verified email.
+- Administrator account totals and student participation details are available only to authenticated administrators.
 - Password and OTP sign-in endpoints have been removed; Google OAuth credentials are used only on the backend.
 - Browser sessions expire after eight hours; only hashes of session tokens are stored in PostgreSQL.
 - Helmet, exact-origin CORS, request-size limits, CSRF protections, and role/record-level authorization protect API requests.

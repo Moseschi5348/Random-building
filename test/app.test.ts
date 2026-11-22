@@ -17,6 +17,7 @@ const config: AppConfig = {
   },
   clientUrl: "http://localhost:5173",
   corsOrigins: ["http://localhost:5173"],
+  adminEmail: null,
   google: null,
 };
 const prisma = new PrismaClient({ datasources: { db: { url: config.databaseUrl } } });
@@ -90,6 +91,20 @@ describe("API security and health", () => {
     expect(font.status).toBe(200);
   });
 
+  it("serves the administrator dashboard and its assets", async () => {
+    const [page, script, styles] = await Promise.all([
+      fetch(`${baseUrl}/admin.html`),
+      fetch(`${baseUrl}/admin.js`),
+      fetch(`${baseUrl}/admin.css`),
+    ]);
+
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain("data-admin-page");
+    expect(script.status).toBe(200);
+    expect(await script.text()).toContain("/api/admin/overview");
+    expect(styles.status).toBe(200);
+  });
+
   it("serves the landing, dashboard, sign-in pages, and frontend assets", async () => {
     const [landing, dashboard, login, register, authScript, font] = await Promise.all([
       fetch(`${baseUrl}/`),
@@ -121,14 +136,16 @@ describe("API security and health", () => {
   });
 
   it("rejects protected routes without a session cookie", async () => {
-    const [profile, session, notices] = await Promise.all([
+    const [profile, session, notices, adminOverview] = await Promise.all([
       fetch(`${baseUrl}/api/me`),
       fetch(`${baseUrl}/api/auth/session`),
       fetch(`${baseUrl}/api/student-life/notices`),
+      fetch(`${baseUrl}/api/admin/overview`),
     ]);
     expect(profile.status).toBe(401);
     expect(session.status).toBe(401);
     expect(notices.status).toBe(401);
+    expect(adminOverview.status).toBe(401);
   });
 
   it("allows the CSRF header during CORS preflight from the configured frontend", async () => {

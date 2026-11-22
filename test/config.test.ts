@@ -26,5 +26,6 @@ describe("environment configuration", () => {
     }
 
     expect(getConfig().stripe).toBeNull();
+    expect(getConfig().adminEmail).toBe("admin@example.com");
   });
 });

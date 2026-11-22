@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f7f6eb">
+    <meta name="description" content="Administrator overview of DIS accounts and student participation.">
+    <title>Admin | Northstar Student Life</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="pages.css">
+    <link rel="stylesheet" href="admin.css">
+    <script src="auth.js" defer></script>
+    <script src="theme.js" defer></script>
+    <script src="admin.js" defer></script>
+</head>
+<body data-protected-page data-admin-page>
+    <div class="app-shell">
+        <aside class="sidebar" aria-label="Main navigation">
+            <a class="brand" href="home.html" aria-label="Northstar home">
+                <span class="brand-mark">N</span>
+                <span class="brand-copy">northstar<span>STUDENT LIFE</span></span>
+            </a>
+            <div class="nav-label">MENU</div>
+            <nav class="main-nav">
+                <a class="nav-link" href="home.html"><span class="nav-icon">⌂</span>Overview</a>
+                <a class="nav-link" href="clubs.html"><span class="nav-icon">◈</span>Clubs</a>
+                <a class="nav-link" href="activities.html"><span class="nav-icon">▤</span>Activities</a>
+                <a class="nav-link" href="rewards.html"><span class="nav-icon">✳</span>Rewards</a>
+                <a class="nav-link" href="community.html"><span class="nav-icon">♡</span>Connect</a>
+                <a class="nav-link active" href="admin.html" aria-current="page"><span class="nav-icon">▦</span>Admin</a>
+            </nav>
+            <div class="sidebar-card">
+                <span class="sidebar-sparkle">✦</span>
+                <p class="sidebar-card-title">Student participation</p>
+                <p>Review account and activity totals for the DIS community.</p>
+                <a href="home.html">Back to student life <span>→</span></a>
+            </div>
+            <div class="sidebar-profile">
+                <div class="avatar avatar-small" data-user-initials>?</div>
+                <div><strong data-user-name>Admin</strong><span data-user-role>Admin</span></div>
+                <button class="sign-out-button" id="sign-out" type="button">Sign out</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div class="breadcrumb">DIS <span>/</span> <strong>Administration</strong></div>
+                <div class="topbar-actions">
+                    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme" aria-pressed="false"><span class="theme-icon">☾</span><span class="theme-label">Dark</span></button>
+                    <div class="avatar avatar-top" data-user-initials>AD</div>
+                </div>
+            </header>
+
+            <section class="welcome-section">
+                <div>
+                    <p class="eyebrow"><span class="live-dot"></span> ADMINISTRATION</p>
+                    <h1>Community overview</h1>
+                    <p class="welcome-copy">Account totals and participation across clubs and activities.</p>
+                </div>
+                <button class="button button-primary" id="refresh-admin" type="button"><span>↻</span> Refresh</button>
+            </section>
+
+            <section class="admin-stats" aria-label="Community totals">
+                <article class="stat-card"><div class="stat-icon icon-lilac">♙</div><div class="stat-label">Total accounts</div><div class="stat-bottom"><strong id="total-users">—</strong></div><div class="stat-foot">All DIS accounts</div></article>
+                <article class="stat-card"><div class="stat-icon icon-mint">✓</div><div class="stat-label">Active students</div><div class="stat-bottom"><strong id="active-students">—</strong></div><div class="stat-foot">Student role, active account</div></article>
+                <article class="stat-card"><div class="stat-icon icon-peach">◉</div><div class="stat-label">Active accounts</div><div class="stat-bottom"><strong id="active-accounts">—</strong></div><div class="stat-foot">Not currently deactivated</div></article>
+                <article class="stat-card"><div class="stat-icon icon-yellow">＋</div><div class="stat-label">New in 30 days</div><div class="stat-bottom"><strong id="new-users">—</strong></div><div class="stat-foot">Recently created accounts</div></article>
+                <article class="stat-card"><div class="stat-icon icon-peach">◷</div><div class="stat-label">Attendance records</div><div class="stat-bottom"><strong id="attendance-total">—</strong></div><div class="stat-foot">Recorded participation</div></article>
+                <article class="stat-card"><div class="stat-icon icon-mint">◈</div><div class="stat-label">Active memberships</div><div class="stat-bottom"><strong id="membership-total">—</strong></div><div class="stat-foot">Current club memberships</div></article>
+            </section>
+
+            <section class="panel admin-directory" aria-labelledby="directory-title">
+                <div class="panel-heading admin-directory-heading">
+                    <div>
+                        <p class="section-kicker">ACCOUNT DIRECTORY</p>
+                        <h2 id="directory-title">People and participation</h2>
+                        <p class="panel-subtitle">Search by name or email. Activity counts reflect recorded DIS data.</p>
+                    </div>
+                    <form id="admin-search-form" class="admin-search">
+                        <label class="sr-only" for="admin-search">Search accounts</label>
+                        <input id="admin-search" type="search" maxlength="100" placeholder="Search name or email">
+                        <button class="button button-primary" type="submit">Search</button>
+                    </form>
+                </div>
+                <p class="admin-status" id="admin-status" role="status" aria-live="polite">Loading accounts…</p>
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Person</th>
+                                <th scope="col">Role</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Joined</th>
+                                <th scope="col">Points</th>
+                                <th scope="col">Clubs</th>
+                                <th scope="col">Activities</th>
+                                <th scope="col">Attendance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-users"></tbody>
+                    </table>
+                </div>
+                <div class="admin-pagination">
+                    <span id="admin-page-label">Page 1 of 1</span>
+                    <div>
+                        <button class="button admin-page-button" id="admin-prev" type="button" disabled>Previous</button>
+                        <button class="button admin-page-button" id="admin-next" type="button" disabled>Next</button>
+                    </div>
+                </div>
+            </section>
+            <footer class="page-footer"><span>Administrator view · Student records are visible only to admins.</span><span>Northstar Student Life</span></footer>
+        </main>
+    </div>
+
+    <div class="session-guard" id="session-guard" role="status">
+        <section>
+            <div class="session-guard-mark">N</div>
+            <h1>Checking administrator access</h1>
+            <p id="session-message">Please wait while we verify your session.</p>
+            <a id="session-link" href="login.html">Return to sign in</a>
+        </section>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

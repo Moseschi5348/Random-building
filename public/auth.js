@@ -103,6 +103,9 @@ async function checkDashboardSession() {
         if (!payload.user || typeof payload.user.displayName !== "string" || typeof payload.user.role !== "string") {
             throw new Error("invalid-session");
         }
+        if (document.body.hasAttribute("data-admin-page") && payload.user.role !== "admin") {
+            throw new Error("forbidden");
+        }
         const requiredPermission = document.body.hasAttribute("data-community-page")
             ? "community:read"
             : "student-life:read";
@@ -134,6 +137,11 @@ async function checkDashboardSession() {
         document.querySelectorAll("[data-user-role]").forEach((element) => {
             element.textContent = payload.user.role;
         });
+        if (payload.user.role === "admin") {
+            document.querySelectorAll("[data-admin-link]").forEach((element) => {
+                element.hidden = false;
+            });
+        }
         const noticesReady = await loadNotices();
         if (!noticesReady) return;
         document.body.classList.add("session-ready");
