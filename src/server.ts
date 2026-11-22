@@ -6,7 +6,7 @@ import { getConfig } from "./config";
 
 const config = getConfig();
 const prisma = new PrismaClient();
-const stripe = new Stripe(config.stripeSecretKey);
+const stripe = config.stripe ? new Stripe(config.stripe.secretKey) : null;
 const app = createApp(prisma, stripe, config, express());
 
 const server = app.listen(config.port, () => {

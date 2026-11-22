@@ -140,7 +140,7 @@ async function assertClubManager(
 
 export function createApiRouter(
   prisma: PrismaClient,
-  stripe: Stripe,
+  stripe: Stripe | null,
   config: AppConfig,
 ): Router {
   const router = Router();
@@ -496,6 +496,9 @@ export function createApiRouter(
     ) {
       throw new HttpError(409, "You already have an active or pending club membership.");
     }
+    if (club.membershipFeeCents > 0 && !stripe) {
+      throw new HttpError(503, "Paid club memberships are not enabled.");
+    }
 
     const membership = priorMembership
       ? await prisma.membership.update({
@@ -521,6 +524,9 @@ export function createApiRouter(
     if (club.membershipFeeCents === 0) {
       res.status(201).json({ membership });
       return;
+    }
+    if (!stripe) {
+      throw new HttpError(503, "Paid club memberships are not enabled.");
     }
 
     try {
@@ -599,6 +605,9 @@ export function createApiRouter(
     ) {
       throw new HttpError(409, "You already have an active or pending registration.");
     }
+    if (activity.registrationFeeCents > 0 && !stripe) {
+      throw new HttpError(503, "Paid activity registrations are not enabled.");
+    }
 
     const registration = prior
       ? await prisma.activityRegistration.update({
@@ -624,6 +633,9 @@ export function createApiRouter(
     if (activity.registrationFeeCents === 0) {
       res.status(201).json({ registration });
       return;
+    }
+    if (!stripe) {
+      throw new HttpError(503, "Paid activity registrations are not enabled.");
     }
 
     try {
@@ -730,6 +742,9 @@ export function createApiRouter(
   });
 
   router.post("/webhooks/stripe", async (req, res) => {
+    if (!stripe || !config.stripe) {
+      throw new HttpError(503, "Stripe payments are not configured.");
+    }
     const signature = req.header("stripe-signature");
     if (!signature || !Buffer.isBuffer(req.body)) {
       res.status(400).json({ error: "Invalid Stripe webhook request." });
@@ -737,7 +752,7 @@ export function createApiRouter(
     }
     let event: Stripe.Event;
     try {
-      event = stripe.webhooks.constructEvent(req.body, signature, config.stripeWebhookSecret);
+      event = stripe.webhooks.constructEvent(req.body, signature, config.stripe.webhookSecret);
     } catch {
       res.status(400).json({ error: "Invalid Stripe webhook signature." });
       return;

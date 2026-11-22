@@ -9,7 +9,12 @@ import type { AppConfig } from "./config";
 import { errorHandler, notFoundHandler } from "./http";
 import { createApiRouter } from "./routes";
 
-export function createApp(prisma: PrismaClient, stripe: Stripe, config: AppConfig, app = express()) {
+export function createApp(
+  prisma: PrismaClient,
+  stripe: Stripe | null,
+  config: AppConfig,
+  app = express(),
+) {
   app.disable("x-powered-by");
   app.use(helmet());
   app.use((_req, res, next) => {

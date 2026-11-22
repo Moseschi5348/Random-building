@@ -11,8 +11,10 @@ const config: AppConfig = {
   port: 0,
   databaseUrl: "postgresql://test:test@localhost:5432/test",
   directUrl: "postgresql://test:test@localhost:5432/test",
-  stripeSecretKey: "sk_test_dis_backend",
-  stripeWebhookSecret: "whsec_dis_backend_test_secret",
+  stripe: {
+    secretKey: "sk_test_dis_backend",
+    webhookSecret: "whsec_dis_backend_test_secret",
+  },
   clientUrl: "http://localhost:5173",
   corsOrigins: ["http://localhost:5173"],
   google: null,
@@ -27,8 +29,9 @@ describe("API security and health", () => {
 
   beforeAll(async () => {
     server = createApp(prisma, stripe, config).listen(0, "127.0.0.1");
-    googleServer = createApp(prisma, stripe, {
+    googleServer = createApp(prisma, null, {
       ...config,
+      stripe: null,
       google: {
         clientId: "google-client-id",
         clientSecret: "google-client-secret",
@@ -177,6 +180,29 @@ describe("API security and health", () => {
     expect(cookies).toContain("dis_google_nonce=");
     expect(cookies).toContain("HttpOnly");
     expect(cookies).toContain("SameSite=Lax");
+  });
+
+  it("allows health checks and Google OAuth without Stripe configuration", async () => {
+    const [health, google] = await Promise.all([
+      fetch(`${googleBaseUrl}/health`),
+      fetch(`${googleBaseUrl}/api/auth/google`, { redirect: "manual" }),
+    ]);
+
+    expect(health.status).toBe(200);
+    expect(google.status).toBe(302);
+    expect(new URL(google.headers.get("location") ?? "").origin)
+      .toBe("https://accounts.google.com");
+  });
+
+  it("reports Stripe webhooks as unavailable when payments are not configured", async () => {
+    const response = await fetch(`${googleBaseUrl}/api/webhooks/stripe`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "Stripe payments are not configured." });
   });
 
   it("rejects a Google callback without the matching state cookie", async () => {
