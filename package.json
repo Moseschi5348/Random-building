@@ -19,7 +19,6 @@
     "express-rate-limit": "^8.1.0",
     "google-auth-library": "^10.9.1",
     "helmet": "^8.1.0",
-    "stripe": "^18.5.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {

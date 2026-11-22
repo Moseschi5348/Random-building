@@ -11,8 +11,6 @@ const configSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_URL: z.string().min(1),
   DIRECT_URL: z.string().min(1),
-  STRIPE_SECRET_KEY: optionalEnvString.pipe(z.string().startsWith("sk_").optional()),
-  STRIPE_WEBHOOK_SECRET: optionalEnvString.pipe(z.string().startsWith("whsec_").optional()),
   CLIENT_URL: z.string().url(),
   CORS_ORIGIN: z.string().min(1).refine(
     (value) => !value.split(",").some((origin) => origin.trim() === "*"),
@@ -23,15 +21,6 @@ const configSchema = z.object({
   GOOGLE_CLIENT_SECRET: optionalEnvString.pipe(z.string().min(1).optional()),
   GOOGLE_CALLBACK_URL: optionalEnvString.pipe(z.string().url().optional()),
 }).superRefine((data, context) => {
-  const stripeValues = [data.STRIPE_SECRET_KEY, data.STRIPE_WEBHOOK_SECRET];
-  if (stripeValues.some(Boolean) && stripeValues.some((value) => !value)) {
-    context.addIssue({
-      code: "custom",
-      message: "Set both STRIPE_* variables to enable payments.",
-      path: ["STRIPE_SECRET_KEY"],
-    });
-  }
-
   const googleValues = [
     data.GOOGLE_CLIENT_ID,
     data.GOOGLE_CLIENT_SECRET,
@@ -51,10 +40,6 @@ export type AppConfig = {
   port: number;
   databaseUrl: string;
   directUrl: string;
-  stripe: {
-    secretKey: string;
-    webhookSecret: string;
-  } | null;
   clientUrl: string;
   corsOrigins: string[];
   adminEmail: string | null;
@@ -85,13 +70,7 @@ export function getConfig(): AppConfig {
         }
       : null;
   const adminEmail = parsed.data.ADMIN_EMAIL?.trim().toLowerCase() ?? null;
-  const stripe =
-    parsed.data.STRIPE_SECRET_KEY && parsed.data.STRIPE_WEBHOOK_SECRET
-      ? {
-          secretKey: parsed.data.STRIPE_SECRET_KEY,
-          webhookSecret: parsed.data.STRIPE_WEBHOOK_SECRET,
-        }
-      : null;
+
   if (corsOrigins.some((origin) => {
     try {
       new URL(origin);
@@ -114,9 +93,6 @@ export function getConfig(): AppConfig {
     if (google && new URL(google.callbackUrl).protocol !== "https:") {
       throw new Error("Invalid environment configuration: production Google callback must use HTTPS.");
     }
-    if (stripe && stripe.secretKey.startsWith("sk_test_")) {
-      throw new Error("Invalid environment configuration: production cannot use a Stripe test key.");
-    }
   }
   if (
     google &&
@@ -130,7 +106,6 @@ export function getConfig(): AppConfig {
     port: parsed.data.PORT,
     databaseUrl: parsed.data.DATABASE_URL,
     directUrl: parsed.data.DIRECT_URL,
-    stripe,
     clientUrl: parsed.data.CLIENT_URL,
     corsOrigins,
     adminEmail,

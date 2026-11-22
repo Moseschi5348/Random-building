@@ -76,7 +76,6 @@ const config: AppConfig = {
   port: 0,
   databaseUrl: "postgresql://test:test@localhost:5432/test",
   directUrl: "postgresql://test:test@localhost:5432/test",
-  stripe: null,
   clientUrl: "http://localhost:3000",
   corsOrigins: ["http://localhost:3000"],
   adminEmail: null,
@@ -88,7 +87,7 @@ describe("student community integration", () => {
   let baseUrl: string;
 
   beforeAll(async () => {
-    server = createApp(prisma, null, config, express()).listen(0, "127.0.0.1");
+    server = createApp(prisma, config, express()).listen(0, "127.0.0.1");
     await new Promise<void>((resolve) => server.once("listening", resolve));
     const address = server.address();
     if (!address || typeof address === "string") {

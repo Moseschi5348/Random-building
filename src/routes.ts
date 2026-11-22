@@ -11,7 +11,6 @@ import {
   UserRole,
   type PrismaClient,
 } from "@prisma/client";
-import type Stripe from "stripe";
 import {
   clearSessionCookie,
   createSessionCredentials,
@@ -24,7 +23,6 @@ import {
 } from "./auth";
 import type { AppConfig } from "./config";
 import { HttpError, parseBody } from "./http";
-import { applyStripeEvent, createCheckoutSession } from "./payments";
 import { z } from "zod";
 
 const clubSchema = z.object({
@@ -147,12 +145,15 @@ async function createLoginSession(
 
 async function assertClubManager(
   prisma: PrismaClient,
-  clubId: string,
+  clubId: string | null,
   userId: string,
   role: UserRole,
 ): Promise<void> {
   if (role === UserRole.ADMIN) {
     return;
+  }
+  if (!clubId) {
+    throw new HttpError(403, "Only administrators can manage all-club activities.");
   }
   const club = await prisma.club.findUnique({
     where: { id: clubId },
@@ -168,7 +169,6 @@ async function assertClubManager(
 
 export function createApiRouter(
   prisma: PrismaClient,
-  stripe: Stripe | null,
   config: AppConfig,
 ): Router {
   const router = Router();
@@ -926,62 +926,42 @@ export function createApiRouter(
     const priorMembership = await prisma.membership.findUnique({
       where: { userId_clubId: { userId, clubId: club.id } },
     });
-    if (
-      priorMembership?.status === MembershipStatus.ACTIVE ||
-      priorMembership?.status === MembershipStatus.PENDING
-    ) {
-      throw new HttpError(409, "You already have an active or pending club membership.");
-    }
-    if (club.membershipFeeCents > 0 && !stripe) {
-      throw new HttpError(503, "Paid club memberships are not enabled.");
+    if (priorMembership?.status === MembershipStatus.ACTIVE) {
+      throw new HttpError(409, "You already have an active club membership.");
     }
 
     const membership = priorMembership
       ? await prisma.membership.update({
           where: { id: priorMembership.id },
-          data: {
-            status:
-              club.membershipFeeCents === 0
-                ? MembershipStatus.ACTIVE
-                : MembershipStatus.PENDING,
-          },
+          data: { status: MembershipStatus.ACTIVE },
         })
       : await prisma.membership.create({
           data: {
             userId,
             clubId: club.id,
-            status:
-              club.membershipFeeCents === 0
-                ? MembershipStatus.ACTIVE
-                : MembershipStatus.PENDING,
+            status: MembershipStatus.ACTIVE,
           },
         });
 
-    if (club.membershipFeeCents === 0) {
-      res.status(201).json({ membership });
-      return;
-    }
-    if (!stripe) {
-      throw new HttpError(503, "Paid club memberships are not enabled.");
-    }
+    res.status(201).json({ membership });
+  });
 
-    try {
-      const checkout = await createCheckoutSession(
-        prisma,
-        stripe,
-        config.clientUrl,
-        userId,
-        club.membershipFeeCents,
-        { type: "MEMBERSHIP", membershipId: membership.id, label: `${club.name} membership` },
-      );
-      res.status(201).json({ membership, ...checkout });
-    } catch (error) {
-      await prisma.membership.update({
-        where: { id: membership.id },
-        data: { status: MembershipStatus.CANCELLED },
-      });
-      throw error;
-    }
+  router.get("/activities", async (_req, res) => {
+    const activities = await prisma.activity.findMany({
+      where: { startsAt: { gt: new Date() } },
+      orderBy: { startsAt: "asc" },
+      select: {
+        id: true,
+        clubId: true,
+        title: true,
+        description: true,
+        startsAt: true,
+        registrationFeeCents: true,
+        club: { select: { id: true, name: true } },
+        _count: { select: { registrations: { where: { status: RegistrationStatus.CONFIRMED } } } },
+      },
+    });
+    res.json(activities);
   });
 
   router.get("/clubs/:clubId/activities", async (req, res) => {
@@ -1035,71 +1015,34 @@ export function createApiRouter(
     const prior = await prisma.activityRegistration.findUnique({
       where: { userId_activityId: { userId, activityId: activity.id } },
     });
-    if (
-      prior?.status === RegistrationStatus.CONFIRMED ||
-      prior?.status === RegistrationStatus.PENDING
-    ) {
-      throw new HttpError(409, "You already have an active or pending registration.");
-    }
-    if (activity.registrationFeeCents > 0 && !stripe) {
-      throw new HttpError(503, "Paid activity registrations are not enabled.");
+    if (prior?.status === RegistrationStatus.CONFIRMED) {
+      throw new HttpError(409, "You already have an active registration.");
     }
 
     const registration = prior
       ? await prisma.activityRegistration.update({
           where: { id: prior.id },
-          data: {
-            status:
-              activity.registrationFeeCents === 0
-                ? RegistrationStatus.CONFIRMED
-                : RegistrationStatus.PENDING,
-          },
+          data: { status: RegistrationStatus.CONFIRMED },
         })
       : await prisma.activityRegistration.create({
           data: {
             userId,
             activityId: activity.id,
-            status:
-              activity.registrationFeeCents === 0
-                ? RegistrationStatus.CONFIRMED
-                : RegistrationStatus.PENDING,
+            status: RegistrationStatus.CONFIRMED,
           },
         });
 
-    if (activity.registrationFeeCents === 0) {
-      res.status(201).json({ registration });
-      return;
-    }
-    if (!stripe) {
-      throw new HttpError(503, "Paid activity registrations are not enabled.");
-    }
-
-    try {
-      const checkout = await createCheckoutSession(
-        prisma,
-        stripe,
-        config.clientUrl,
-        userId,
-        activity.registrationFeeCents,
-        {
-          type: "ACTIVITY",
-          activityRegistrationId: registration.id,
-          label: activity.title,
-        },
-      );
-      res.status(201).json({ registration, ...checkout });
-    } catch (error) {
-      await prisma.activityRegistration.update({
-        where: { id: registration.id },
-        data: { status: RegistrationStatus.CANCELLED },
-      });
-      throw error;
-    }
+    res.status(201).json({ registration });
   });
 
   router.post("/activities/:activityId/attendance", auth, async (req, res) => {
     const body = parseBody(attendanceSchema, req.body);
     const actorId = currentUserId(req);
+
+    if (body.userId === actorId) {
+      throw new HttpError(403, "You cannot record attendance or award points to yourself.");
+    }
+
     const activity = await prisma.activity.findUnique({
       where: { id: routeParam(req, "activityId") },
       select: { id: true, clubId: true, startsAt: true },
@@ -1115,6 +1058,13 @@ export function createApiRouter(
       throw new HttpError(401, "Authentication is required.");
     }
     await assertClubManager(prisma, activity.clubId, actorId, actorRole);
+
+    const priorAttendance = await prisma.attendance.findUnique({
+      where: { userId_activityId: { userId: body.userId, activityId: activity.id } },
+    });
+    if (priorAttendance) {
+      throw new HttpError(409, "Attendance has already been recorded for this user.");
+    }
 
     const registration = await prisma.activityRegistration.findUnique({
       where: { userId_activityId: { userId: body.userId, activityId: activity.id } },
@@ -1175,26 +1125,6 @@ export function createApiRouter(
       select: { id: true, name: true, points: true },
     });
     res.json(users);
-  });
-
-  router.post("/webhooks/stripe", async (req, res) => {
-    if (!stripe || !config.stripe) {
-      throw new HttpError(503, "Stripe payments are not configured.");
-    }
-    const signature = req.header("stripe-signature");
-    if (!signature || !Buffer.isBuffer(req.body)) {
-      res.status(400).json({ error: "Invalid Stripe webhook request." });
-      return;
-    }
-    let event: Stripe.Event;
-    try {
-      event = stripe.webhooks.constructEvent(req.body, signature, config.stripe.webhookSecret);
-    } catch {
-      res.status(400).json({ error: "Invalid Stripe webhook signature." });
-      return;
-    }
-    await applyStripeEvent(prisma, event);
-    res.json({ received: true });
   });
 
   return router;

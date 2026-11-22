@@ -19,7 +19,7 @@ if (siteNavLinks.length > 0) {
 
 let activeTheme = "light";
 try {
-    const savedTheme = localStorage.getItem("northstar-theme");
+    const savedTheme = localStorage.getItem("club-theme") || localStorage.getItem("northstar-theme");
     if (savedTheme === "light" || savedTheme === "dark") activeTheme = savedTheme;
 } catch (error) {
     console.warn("Theme preference could not be loaded.", error);

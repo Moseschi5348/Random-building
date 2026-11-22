@@ -395,17 +395,14 @@ function updateClubVisibility() {
 }
 
 async function loadDashboard() {
-    const [user, clubs] = await Promise.all([api("/me"), api("/clubs")]);
-    const activitiesByClub = await Promise.all(clubs.map((club) =>
-        api(`/clubs/${encodeURIComponent(club.id)}/activities`)
-    ));
+    const [user, clubs, activities] = await Promise.all([
+        api("/me"),
+        api("/clubs"),
+        api("/activities")
+    ]);
     state.user = user;
     state.clubs = clubs;
-    state.activities = activitiesByClub.flat()
-        .map((activity) => ({
-            ...activity,
-            club: clubs.find((club) => club.id === activity.clubId)
-        }))
+    state.activities = activities
         .filter((activity) => activity.club && new Date(activity.startsAt) > new Date())
         .sort((left, right) => new Date(left.startsAt) - new Date(right.startsAt));
     renderDashboard();

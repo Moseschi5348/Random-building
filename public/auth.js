@@ -123,6 +123,7 @@ async function checkDashboardSession() {
             throw new Error("forbidden");
         }
 
+        window.clubCsrfToken = payload.csrfToken;
         window.northstarCsrfToken = payload.csrfToken;
         const name = payload.user.displayName;
         document.querySelectorAll("[data-user-name]").forEach((element) => {
@@ -146,11 +147,12 @@ async function checkDashboardSession() {
         if (!noticesReady) return;
         document.body.classList.add("session-ready");
         guard.hidden = true;
+        window.dispatchEvent(new CustomEvent("club:session-ready", { detail: payload.user }));
         window.dispatchEvent(new CustomEvent("northstar:session-ready", { detail: payload.user }));
     } catch (error) {
         if (error.message === "forbidden") {
-            message.textContent = "Your school account doesn’t have permission to open this page. Contact your school administrator.";
-            document.querySelector("#session-link").textContent = "Return to Northstar";
+            message.textContent = "Your account doesn’t have permission to open this page. Contact your administrator.";
+            document.querySelector("#session-link").textContent = "Return to home";
             document.querySelector("#session-link").href = "index.html";
         } else {
             message.textContent = "We can’t verify your session right now. The student portal is unavailable until the DIS service responds.";

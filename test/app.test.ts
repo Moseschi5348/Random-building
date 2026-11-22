@@ -1,20 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "@prisma/client";
-import Stripe from "stripe";
 import type { Server } from "node:http";
 import { createApp } from "../src/app-factory";
 import type { AppConfig } from "../src/config";
 
-const stripe = new Stripe("sk_test_dis_backend");
 const config: AppConfig = {
   nodeEnv: "test",
   port: 0,
   databaseUrl: "postgresql://test:test@localhost:5432/test",
   directUrl: "postgresql://test:test@localhost:5432/test",
-  stripe: {
-    secretKey: "sk_test_dis_backend",
-    webhookSecret: "whsec_dis_backend_test_secret",
-  },
   clientUrl: "http://localhost:5173",
   corsOrigins: ["http://localhost:5173"],
   adminEmail: null,
@@ -29,10 +23,9 @@ describe("API security and health", () => {
   let googleBaseUrl: string;
 
   beforeAll(async () => {
-    server = createApp(prisma, stripe, config).listen(0, "127.0.0.1");
-    googleServer = createApp(prisma, null, {
+    server = createApp(prisma, config).listen(0, "127.0.0.1");
+    googleServer = createApp(prisma, {
       ...config,
-      stripe: null,
       google: {
         clientId: "google-client-id",
         clientSecret: "google-client-secret",
@@ -219,7 +212,7 @@ describe("API security and health", () => {
     expect(cookies).toContain("SameSite=Lax");
   });
 
-  it("allows health checks and Google OAuth without Stripe configuration", async () => {
+  it("allows health checks and Google OAuth configuration", async () => {
     const [health, google] = await Promise.all([
       fetch(`${googleBaseUrl}/health`),
       fetch(`${googleBaseUrl}/api/auth/google`, { redirect: "manual" }),
@@ -231,17 +224,6 @@ describe("API security and health", () => {
       .toBe("https://accounts.google.com");
   });
 
-  it("reports Stripe webhooks as unavailable when payments are not configured", async () => {
-    const response = await fetch(`${googleBaseUrl}/api/webhooks/stripe`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: "{}",
-    });
-
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: "Stripe payments are not configured." });
-  });
-
   it("rejects a Google callback without the matching state cookie", async () => {
     const response = await fetch(
       `${googleBaseUrl}/api/auth/google/callback?code=unused&state=attacker-state`,
@@ -251,17 +233,5 @@ describe("API security and health", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("http://localhost:5173/login.html?error=google");
     expect(response.headers.get("set-cookie")).toContain("dis_google_state=");
-  });
-
-  it("rejects unsigned Stripe webhook requests", async () => {
-    const response = await fetch(`${baseUrl}/api/webhooks/stripe`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "stripe-signature": "t=0,v1=invalid",
-      },
-      body: "{}",
-    });
-    expect(response.status).toBe(400);
   });
 });

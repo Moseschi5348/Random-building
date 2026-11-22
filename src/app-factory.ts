@@ -4,14 +4,12 @@ import { rateLimit } from "express-rate-limit";
 import helmet from "helmet";
 import { resolve } from "node:path";
 import type { PrismaClient } from "@prisma/client";
-import type Stripe from "stripe";
 import type { AppConfig } from "./config";
 import { errorHandler, notFoundHandler } from "./http";
 import { createApiRouter } from "./routes";
 
 export function createApp(
   prisma: PrismaClient,
-  stripe: Stripe | null,
   config: AppConfig,
   app = express(),
 ) {
@@ -25,7 +23,7 @@ export function createApp(
     cors({
       origin: config.corsOrigins,
       methods: ["GET", "POST", "PATCH"],
-      allowedHeaders: ["Content-Type", "Stripe-Signature", "X-CSRF-Token"],
+      allowedHeaders: ["Content-Type", "X-CSRF-Token"],
     }),
   );
   app.use(
@@ -34,7 +32,6 @@ export function createApp(
       limit: 200,
       standardHeaders: "draft-8",
       legacyHeaders: false,
-      skip: (req) => req.path === "/api/webhooks/stripe",
     }),
   );
   const authRateLimit = rateLimit({
@@ -82,12 +79,8 @@ export function createApp(
   });
 
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
-  app.use(
-    "/api/webhooks/stripe",
-    express.raw({ type: "application/json", limit: "100kb" }),
-  );
   app.use("/api", express.json({ limit: "100kb" }));
-  app.use("/api", createApiRouter(prisma, stripe, config));
+  app.use("/api", createApiRouter(prisma, config));
   app.use(notFoundHandler);
   app.use(errorHandler);
   return app;
